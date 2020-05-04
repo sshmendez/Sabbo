@@ -4,16 +4,12 @@ const path = require("path");
 const alphanum = /^[a-z0-9]+$/i;
 
 function Sabbo(config) {
-    if (!(this instanceof Sabbo)) {
-        return new Sabbo(config);
-    }
-    this.appname = config.appname;
-    Object.assign(this, config)
-    if (!config.cloneFrom) {
-        Git.Repository.init(this.gitpath, 1);
+    const { gitpath, cloneFrom } = config
+    if (!cloneFrom) {
+        Git.Repository.init(gitpath, 1);
     } else {
         console.log('cloning')
-        Git.Clone(this.cloneFrom, this.gitpath, {
+        Git.Clone(cloneFrom, gitpath, {
             bare: 1
         }).catch(repo => {
             console.log(repo)
@@ -104,13 +100,13 @@ Sabbo.getPath = async function (config) {
     return path.join(servepath, blob);
 };
 
-Sabbo.prototype.addRoute = function (router, route) {
+Sabbo.addRoute = function (router, route) {
     router.use(route, (ctx, next) => {
         ctx.body = "added route";
         next();
     });
 };
-Sabbo.prototype.validDir = async function (dirname) {
+Sabbo.validDir = async function (dirname) {
     return alphanum.test(dirname);
 };
 
