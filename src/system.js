@@ -45,7 +45,9 @@ Sabbo.buildConfig = function (config) {
     return config
 }
 Sabbo.initializeSrc = async function (config, blob) {
+    const { gitpath, servepath, commitid } = config
     let clonepath = path.join(servepath, blob)
+    console.log(servepath)
     console.log(clonepath)
     return Git.Clone(gitpath, clonepath, {
         fetchOpts: {
@@ -58,10 +60,10 @@ Sabbo.initializeSrc = async function (config, blob) {
             },
         },
     }).then(async (repo) => {
-        console.log('getting commit')
-        let commit = await repo.getCommit(commitid)
-        console.log('got commit')
-        console.log(commit.id)
+        // console.log('getting commit')
+        // let commit = await repo.getCommit(commitid)
+        // console.log('got commit')
+        // console.log(commit.id)
 
     })
 }

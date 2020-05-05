@@ -7,7 +7,7 @@ appname = "te8st3";
 let config = {
     appname,
     branch: 'master',
-    commit: 'head',
+    commitid: 'head',
     cloneFrom: '/Users/mendez/dev/proj/workspace/modulethief'
 
 }
@@ -16,10 +16,11 @@ console.log(config)
 cleanup(config)
 async function test1(config) {
     await Sabbo(config, true)
-    let {appname,branch,commit} =  config
-    let blob = await Sabbo.blob(appname, branch, commit)
-    console.log(blob)
+let { appname, branch, commitid } = config      
+    let blob = await Sabbo.blob(appname, branch, commitid)
+    console.log('created blob '+blob)
     try {
+        console.log(config.servepath)
         await Sabbo.initializeSrc(config,blob)
 
     } catch (err) {
