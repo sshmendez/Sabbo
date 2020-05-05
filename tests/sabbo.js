@@ -14,22 +14,21 @@ let config = {
 config = Sabbo.buildConfig(config)
 console.log(config)
 cleanup(config)
-s = new Sabbo(config);
-Sabbo.getPath(config).then(async (path) => {
-    config.servepath = path
+async function test1(config) {
+    await Sabbo(config, true)
+    let {appname,branch,commit} =  config
+    let blob = await Sabbo.blob(appname, branch, commit)
+    console.log(blob)
     try {
-        await Sabbo.create(config)
+        await Sabbo.initializeSrc(config,blob)
 
-    } catch {
-
+    } catch (err) {
+        
+        console.log(err)
     }
-
-}).then(() => {
-    setTimeout(() => {
-        cleanup(config)
-    }, 2000);
-})
-console.log(fse.removeSync(config.servepath))
+    
+}
+test1(config)
 
 function cleanup(config) {
     console.log("Cleaning up")

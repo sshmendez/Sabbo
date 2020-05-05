@@ -3,16 +3,20 @@ const Git = require("nodegit");
 const path = require("path");
 const alphanum = /^[a-z0-9]+$/i;
 
-function Sabbo(config) {
+async function Sabbo(config,override) {
     const { gitpath, cloneFrom } = config
     if (!cloneFrom) {
-        Git.Repository.init(gitpath, 1);
+        return Git.Repository.init(gitpath, 1);
     } else {
-        console.log('cloning')
-        Git.Clone(cloneFrom, gitpath, {
+        if (override) {
+            await fse.remove(gitpath)
+        }
+        return Git.Clone(cloneFrom, gitpath, {
             bare: 1
         }).catch(repo => {
-            console.log(repo)
+            console.log("repo: "+repo)
+        }).then(() => {
+            console.log('cloned')
         })
     }
 }
@@ -40,13 +44,10 @@ Sabbo.buildConfig = function (config) {
     })
     return config
 }
-Sabbo.create = async function ({
-    branch,
-    commit,
-    gitpath,
-    servepath
-}) {
-    return Git.Clone(gitpath, servepath, {
+Sabbo.initializeSrc = async function (config, blob) {
+    let clonepath = path.join(servepath, blob)
+    console.log(clonepath)
+    return Git.Clone(gitpath, clonepath, {
         fetchOpts: {
             callbacks: {
                 certificateCheck: function () {
@@ -57,7 +58,10 @@ Sabbo.create = async function ({
             },
         },
     }).then(async (repo) => {
-        await repo.getCommit(commit)
+        console.log('getting commit')
+        let commit = await repo.getCommit(commitid)
+        console.log('got commit')
+        console.log(commit.id)
 
     })
 }
@@ -74,32 +78,20 @@ Sabbo.parseBlob = async function (blob) {
  * 
  * this is a helper function, and will only function on a single machine system
  */
-Sabbo.getPath = async function (config) {
-    let {
-        blob,
-        appname,
-        branch,
-        commit,
-        servepath,
-    } = config;
-    if (!branch) {
-        ({
-            branch,
-            commit
-        } = Sabbo.parseBlob(blob));
-    }
-    if (!blob) {
-        blob = new Buffer
-            .from(JSON.stringify({
-                appname,
-                branch,
-                commit
-            }))
-            .toString("base64");
-    }
-    return path.join(servepath, blob);
-};
+Sabbo.blob = async function () {
+    let raw = Object.values(arguments).filter((val)=>!!val)
+    return raw.join('.')
+    blob = new Buffer
+         .from(JSON.stringify({
+             appname,
+             branch,
+             commit
+         }))
+         .toString("base64");
 
+
+    
+}
 Sabbo.addRoute = function (router, route) {
     router.use(route, (ctx, next) => {
         ctx.body = "added route";
