@@ -1,22 +1,19 @@
 const fse = require("fs-extra");
 const Git = require("nodegit");
 const path = require("path");
+
 const alphanum = /^[a-z0-9]+$/i;
 
 async function Sabbo(config,override) {
     const { gitpath, cloneFrom } = config
     if (!cloneFrom) {
-        return Git.Repository.init(gitpath, 1);
+        return await Git.Repository.init(gitpath, 1);
     } else {
         if (override) {
             await fse.remove(gitpath)
         }
-        return Git.Clone(cloneFrom, gitpath, {
+        return await Git.Clone(cloneFrom, gitpath, {
             bare: 1
-        }).catch(repo => {
-            console.log("repo: "+repo)
-        }).then(() => {
-            console.log('cloned')
         })
     }
 }
@@ -94,6 +91,7 @@ Sabbo.blob = async function () {
 
     
 }
+
 Sabbo.addRoute = function (router, route) {
     router.use(route, (ctx, next) => {
         ctx.body = "added route";
