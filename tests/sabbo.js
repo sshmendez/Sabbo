@@ -96,7 +96,7 @@ let tests = {
 
 
 async function run(tests) {
-    
+
     let config = {
         appname: 'te8st3',
         branch: 'master',
@@ -111,9 +111,6 @@ async function run(tests) {
             remote_name: 'origin',
             branch_name: 'linear',
         },
-        'cleave_path': {
-            ignore: 1
-        }
 
     }
     console.log("Cleaning up")

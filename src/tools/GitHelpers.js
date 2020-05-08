@@ -17,7 +17,8 @@ module.exports = {
      *  remote_name: origin,
      *  branch_name: master,
      * }
-     * 
+     *  Todo: find more universal solution, 
+     *  Not sure if this is always the ref name structure
      */
     async cleaveRef(remote_ref) {
         let parts = remote_ref.split('/')
@@ -34,6 +35,9 @@ module.exports = {
             .map(ref => ref.name())
         return remote_refs
     },
+    /**
+     * Todo: handle exceptions or neatly allow them
+     */
     async trackAll(repo) {
         (await this.getRemoteReferences(repo))
             .map(ref => this.cleaveRef(ref))

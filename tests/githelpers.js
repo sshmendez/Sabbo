@@ -14,7 +14,5 @@ config = Sabbo.buildConfig(config)
 
 console.log(config)
 
-Sabbo(config,true).then((repo)=>
-    GitHelpers.trackAll(repo)
-)
+Sabbo(config,true)
 
