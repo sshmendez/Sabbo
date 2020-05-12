@@ -17,7 +17,7 @@ let tests = {
         const {
             Branch
         } = require('nodegit')
-        let bare = await Sabbo(config, true)
+        let bare = await Sabbo(config, true, config.cloneFrom)
 
         let {
             appname,
@@ -90,7 +90,6 @@ let tests = {
         })
         return true
     },
-
 };
 
 

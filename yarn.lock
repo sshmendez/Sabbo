@@ -728,14 +728,6 @@ koa-send@^5.0.0:
     mz "^2.7.0"
     resolve-path "^1.4.0"
 
-koa-static@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/koa-static/-/koa-static-5.0.0.tgz#5e92fc96b537ad5219f425319c95b64772776943"
-  integrity sha512-UqyYyH5YEXaJrf9S8E23GoJFQZXkBVJ9zYYMPGz919MSX1KuvAcycIuS0ci150HCoPf4XQVhQ84Qf8xRPWxFaQ==
-  dependencies:
-    debug "^3.1.0"
-    koa-send "^5.0.0"
-
 koa@^2.11.0:
   version "2.11.0"
   resolved "https://registry.yarnpkg.com/koa/-/koa-2.11.0.tgz#fe5a51c46f566d27632dd5dc8fd5d7dd44f935a4"

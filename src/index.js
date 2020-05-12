@@ -1,105 +1,86 @@
 const Koa = require("koa");
 const Router = require("@koa/router");
 const koaBody = require("koa-body")({
-    multipart: true
+	multipart: true,
 });
+const fse = require("fs-extra");
 const app = new Koa();
 const router = new Router();
 const path = require("path");
-const servestatic = require("koa-static");
-const {
-    Sabbo
-} = require(path.resolve(__dirname, "./system"));
+const send = require("koa-send");
+
+const { Sabbo } = require(path.resolve(__dirname, "./system"));
 // add a route for uploading multiple files
 
-routemap = {};
-const staticroutes = {};
+configs = {};
 const configfile = "../build/build.conf";
+const buildPath = path.resolve("build");
 
-let addRouter = function (routemap) {
-    return async (ctx, next) => {
-        let config = ctx.sabbo.config
-        let appname = config.appname
-        console.log(appname)
-        if (routemap[appname]) {
-            ctx.body = "already exists";
-        } else {
-            if (appname.indexOf("..") > -1) {
-                ctx.body("cannot create directory: " + appname);
-            }
-            Sabbo(config, false);
-            routemap[appname] = config;
-        }
-        await next()
-    };
-};
 router.post("/create", koaBody, async (ctx, next) => {
-    // console.log("ctx.request.files", ctx.request.files);
-    // console.log("ctx.request.body", ctx.request.body);
-    let config = {
-        appname: '',
-        gitpath: '',
-        servepath: ''
-    }
-    Object.keys(config).forEach(
-        (key) => config[key] = path.normalize(ctx.request.body[key] || '')
-    )
+	/**
+	 * I'm sorry. This was just too cool
+	 */
+	let config = Sabbo.buildConfig(
+		Object.assign(
+			{
+				buildPath,
+			},
+			...["appname", "gitpath", "servepath","index"].map((key) => ({
+				[key]: path.normalize(ctx.request.body[key] || ""),
+			}))
+		)
+	);
 
-    ctx.sabbo = {}
-    ctx.sabbo.config = Sabbo.buildConfig(config)
-    console.log(ctx.sabbo)
-    await next();
-}, addRouter(routemap));
+	let clonePath = ctx.request.body.clonePath || "";
 
-router.post("/addroute", koaBody, (ctx, next) => {
-    let route = ctx.request.body.route;
-    console.log(route);
-    routemap[route] = Sabbo.buildConfig({ appname: route })
-    ctx.body = 'route'
-    next();
+	configs[config.appname] = config;
+	if (clonePath) {
+	}
+	console.log(config);
+	console.log("Cloning:", clonePath);
+
+	await Sabbo(config, undefined, clonePath);
+	ctx.body = "done";
+	await next();
 });
+
 router.get("/demos/:appname/:blob?", async (ctx, next) => {
-    let config;
-    try {
-        config = routemap[ctx.params.appname];
-        if (!route) throw Error("Route doesn't exist");
-    } catch {
-        ctx.body = 404;
-    }
+	let { blob, appname } = ctx.params;
+	let config;
+	try {
+		config = configs[appname];
+		if (!config) throw Error("Route doesn't exist");
+	} catch {
+		ctx.body = 404;
+	}
+	if (!blob) blob = await Sabbo.blob("master", "HEAD");
 
-    let {
-        blob,
-        appname
-    } = ctx.params
-    if (!blob)
-        blob = Sabbo.blob('master', 'HEAD')
-    let path = Sabbo.getPath(config, blob);
+	let clonepath = path.join(appname,blob)
+	let repo;
+	if (!fse.existsSync(clonepath))
+		repo = await Sabbo.initializeSrc(config, clonepath);
+	else repo = Sabbo.open(clonepath);
+	console.log(await path.relative(path.resolve("."), clonepath));
+    await send(ctx, await path.relative(path.resolve("."), clonepath),{index: config.index});
 
-    console.log("serving " + path);
-    let staticroute = servestatic(path)
-    staticroute(ctx, async () => {
-        console.log('calling next')
-    })
-    staticroutes[ctx.params.appname] = staticroute
-    await next();
+	await next();
 });
 // add the router to our app
-app.use(async (ctx, next) => {
-    console.log(ctx.path);
-    let query = ctx.path.split("/");
-    if (query[0] == "demos") {
-        let [appname, blob] = query;
-    }
-    await next();
-});
+
 app.use(router.routes());
 app.use(router.allowedMethods());
 app.use(async (ctx, next) => {
-    console.log("finishing request");
-    await next();
+	console.log("finishing request");
+	await next();
 });
 
 console.log("starting: ");
+Sabbo.cleanup(
+	{
+		buildPath,
+	},
+	true
+);
 // start the server
 app.listen(3000);
 ``;

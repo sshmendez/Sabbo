@@ -1,26 +1,30 @@
 const fse = require("fs-extra");
+const fstools = require("./tools/fstools.js")
 const Git = require("nodegit");
 const path = require("path");
 const GitHelpers = require("./tools/GitHelpers.js")
 const alphanum = /^[a-z0-9]+$/i;
-
-async function Sabbo(config, override) {
-    const {
-        gitpath,
-        cloneFrom
-    } = config
-    if (!cloneFrom) {
-        return await Git.Repository.init(gitpath, 1);
+deprecationWarning =
+    process.env.NODE_ENV !== "production" ? console.warn : () => {};
+async function Sabbo(config, override, cloneUrl) {
+    if (override != undefined) deprecationWarning('override will be removed')
+    let gitpath = config.gitpath
+    let repo;
+    if (!cloneUrl) {
+        repo = await Git.Repository.init(gitpath, 1);
     } else {
-        if (override) {
-            await fse.remove(gitpath)
-        }
-        let repo = await Git.Clone(cloneFrom, gitpath, {
+        repo = await Git.Clone(cloneUrl, gitpath, {
             bare: 1
         })
         GitHelpers.trackAll(repo)
-        return repo
     }
+
+    fstools.mkdirs(config.servepath)
+
+    fse.writeFile(path.join(config.buildPath, Sabbo.canRemovePath), 1)
+    fse.writeFile(path.join(config.gitpath, Sabbo.canRemovePath), 1)
+    fse.writeFile(path.join(config.servepath, Sabbo.canRemovePath), 1)
+    return repo
 }
 
 login = function (user, pass) {
@@ -31,31 +35,36 @@ login = function (user, pass) {
     };
 };
 
+Sabbo.canRemovePath = 'remove.sabbo'
+Sabbo.canRemove = function (desiredPath) {
+    return fse.existsSync(path.join(desiredPath, Sabbo.canRemovePath))
+}
+
 Sabbo.buildConfig = function (config) {
     config = Object.assign({}, config)
-    console.log(config)
+    // console.log(config)
     let buildpath = config.buildpath || path.resolve("build");
     build = path.join.bind(path, buildpath)
     gitpath = `git/${config.appname}`;
     servepath = `www/${config.appname}`;
-
 
     Object.assign(config, {
         buildpath: build(),
         gitpath: build(gitpath),
         servepath: build(servepath),
     })
+
+
     return config
 }
-Sabbo.initializeSrc = async function (config, blob) {
+Sabbo.initializeSrc = async function (config, clonepath) {
     const {
         gitpath,
         servepath,
         commitid
     } = config
-    let clonepath = path.join(servepath, blob)
-    console.log(servepath)
-    console.log(clonepath)
+    // console.log(servepath)
+    // console.log(clonepath)
     return Git.Clone(gitpath, clonepath, {
         fetchOpts: {
             callbacks: {
@@ -66,15 +75,11 @@ Sabbo.initializeSrc = async function (config, blob) {
                 },
             },
         },
-    }).then(async (repo) => {
-        // console.log('getting commit')
-        // let commit = await repo.getCommit(commitid)
-        // console.log('got commit')
-        // console.log(commit.id)
-
-    })
+    })  
 }
-
+Sabbo.getPath =  function (config,blob) {
+    return path.join(config.servepath, blob)
+}
 Sabbo.parseBlob = async function (blob) {
     return {
         branch: "master",
@@ -89,7 +94,7 @@ Sabbo.parseBlob = async function (blob) {
  */
 Sabbo.blob = async function () {
     let raw = Object.values(arguments).filter((val) => !!val)
-    return raw.join('.')
+    return raw.join('1')
     blob = new Buffer
         .from(JSON.stringify({
             appname,
@@ -101,10 +106,39 @@ Sabbo.blob = async function () {
 
 
 }
-Sabbo.getPath = async function({gitpath}, blob){
-    return path.join(gitpath,blob)
+Sabbo.open = async function (servepath) {
+    return 8
 }
 
+Sabbo.cleanup = async function (config, scratch) {
+    // console.log(config, scratch)
+    if (scratch) {
+        if (Sabbo.canRemove(config.buildPath))
+            fse.remove(config.buildPath)
+    } else {
+        Sabbo.cleanLocalBare(config)
+        Sabbo.cleanWorking(config)
+    }
+}
+Sabbo.cleanLocalBare = async function ({
+    gitpath
+}) {
+    if (Sabbo.canRemove(gitpath))
+        fse.remove(gitpath)
+}
+
+Sabbo.cleanWorking = async function (config, blobs) {
+    if (blobs)
+        blobs = blobs instanceof Array ? blobs : [blobs]
+    else
+        blobs = ''
+    blobs.forEach(blob => {
+        let worktree = Sabbo.getPath(config, blob)
+        if (Sabbo.canRemove(worktree))
+            fse.remove(worktree)
+    })
+
+}
 Sabbo.addRoute = function (router, route) {
     router.use(route, (ctx, next) => {
         ctx.body = "added route";
