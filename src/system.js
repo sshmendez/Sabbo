@@ -20,10 +20,10 @@ async function Sabbo(config, override, cloneUrl) {
     }
 
     fstools.mkdirs(config.servepath)
-
-    fse.writeFile(path.join(config.buildPath, Sabbo.canRemovePath), 1)
+    fse.writeFile(path.join(config.buildpath, Sabbo.canRemovePath), 1)
     fse.writeFile(path.join(config.gitpath, Sabbo.canRemovePath), 1)
     fse.writeFile(path.join(config.servepath, Sabbo.canRemovePath), 1)
+
     return repo
 }
 
@@ -39,32 +39,58 @@ Sabbo.canRemovePath = 'remove.sabbo'
 Sabbo.canRemove = function (desiredPath) {
     return fse.existsSync(path.join(desiredPath, Sabbo.canRemovePath))
 }
+/**
+ * The removal checks should not be relied on
+ * This was primarily added for testing
+ * 
+ * more stable and secure options include 
+ *  running this in a docker instance
+ *  running as a user with reduced privileges
+ * 
+ * be careful using this, it shouldn't be exposed to an api
+ */
+Sabbo.remove = function(removePath){
+    if(Sabbo.canRemove(removePath)){
+        fse.removeSync(removePath)
+    }
+}
 
+Sabbo.gitpath = function(buildpath, appname){
+    return path.join(buildpath,`git/${appname}`)
+}
+Sabbo.servepath = function(buildpath, appname, blob){
+    blob = blob || ''
+    appname = appname || appname
+    return path.join(buildpath,`www/${appname}`,blob)
+}
 Sabbo.buildConfig = function (config) {
     config = Object.assign({}, config)
-    // console.log(config)
+    if(!config.appname) throw {message: 'Appname must exist', name: 'AppnameException'}
     let buildpath = config.buildpath || path.resolve("build");
     build = path.join.bind(path, buildpath)
-    gitpath = `git/${config.appname}`;
-    servepath = `www/${config.appname}`;
+    gitpath = Sabbo.gitpath(buildpath, config.appname);
+    servepath = Sabbo.servepath(buildpath, config.appname);
 
     Object.assign(config, {
         buildpath: build(),
-        gitpath: build(gitpath),
-        servepath: build(servepath),
+        gitpath,
+        servepath,
     })
 
 
     return config
 }
-Sabbo.initializeSrc = async function (config, clonepath) {
-    const {
-        gitpath,
-        servepath,
-        commitid
-    } = config
-    // console.log(servepath)
-    // console.log(clonepath)
+Sabbo.exists = function(buildpath,appname, blob){
+    if(blob){
+        return fse.existsSync(Sabbo.servepath(buildpath,appname,blob))
+    }
+    console.log(Sabbo.gitpath(buildpath,appname))
+    return fse.existsSync(Sabbo.gitpath(buildpath,appname)) 
+
+}
+Sabbo.initializeWorktree = async function (buildpath, appname, clonename, {branchname, commitid}) {
+    let gitpath = Sabbo.gitpath(buildpath, appname)
+    let clonepath = Sabbo.servepath(buildpath, appname, clonename)
     return Git.Clone(gitpath, clonepath, {
         fetchOpts: {
             callbacks: {
@@ -80,10 +106,11 @@ Sabbo.initializeSrc = async function (config, clonepath) {
 Sabbo.getPath =  function (config,blob) {
     return path.join(config.servepath, blob)
 }
-Sabbo.parseBlob = async function (blob) {
+Sabbo.parseBlob = function (blob) {
+    let sect = blob.split('1')
     return {
-        branch: "master",
-        commit: "",
+        branchname: sect.pop(),
+        commitid: sect.pop(),
     };
 };
 /**
@@ -92,7 +119,7 @@ Sabbo.parseBlob = async function (blob) {
  * 
  * this is a helper function, and will only function on a single machine system
  */
-Sabbo.blob = async function () {
+Sabbo.blob =  function () {
     let raw = Object.values(arguments).filter((val) => !!val)
     return raw.join('1')
     blob = new Buffer
@@ -106,36 +133,33 @@ Sabbo.blob = async function () {
 
 
 }
-Sabbo.open = async function (servepath) {
-    return 8
+Sabbo.open = async function (buildpath, appname, blob) {
+
+    return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob))
 }
 
 Sabbo.cleanup = async function (config, scratch) {
-    // console.log(config, scratch)
     if (scratch) {
-        if (Sabbo.canRemove(config.buildPath))
-            fse.remove(config.buildPath)
+        Sabbo.remove(config.buildpath)
     } else {
-        Sabbo.cleanLocalBare(config)
-        Sabbo.cleanWorking(config)
+         Sabbo.cleanLocalBare(config)
+         Sabbo.cleanWorking(config)
     }
 }
-Sabbo.cleanLocalBare = async function ({
+Sabbo.cleanLocalBare = function ({
     gitpath
 }) {
-    if (Sabbo.canRemove(gitpath))
-        fse.remove(gitpath)
+    Sabbo.remove(gitpath)
 }
 
-Sabbo.cleanWorking = async function (config, blobs) {
+Sabbo.cleanWorking = function (config, blobs) {
     if (blobs)
         blobs = blobs instanceof Array ? blobs : [blobs]
     else
-        blobs = ''
+        blobs = []
     blobs.forEach(blob => {
         let worktree = Sabbo.getPath(config, blob)
-        if (Sabbo.canRemove(worktree))
-            fse.remove(worktree)
+        Sabbo.remove(worktree)
     })
 
 }
