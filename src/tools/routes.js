@@ -44,10 +44,9 @@ let routes = {
             await Sabbo.cleanup(config, false)
         }
         await Sabbo(config, undefined, clonepath);
-        return {appconfig: config}
+        return config
     },
     getWorktree: async ({buildpath, appname, blob})=>{
-        blob = blob || await Sabbo.blob("master", "HEAD");
 
         let repo;
         if(!Sabbo.exists(buildpath, appname, blob)){
@@ -55,11 +54,20 @@ let routes = {
         }
         else repo = Sabbo.open(buildpath, appname, blob)
         return repo
-
-
-
+    },
+    
+    /**
+     * filename is considered unsafe, therefore a path check is performed, and no path
+     * is generated if a '..' or '/' is present
+     */
+    getWorktreePath: async function({buildpath, appname, blob},filename){
+        let repo = await this.getWorktree({buildpath, appname, blob})
+        filename = filename || ''
+        console.log('path ' + path.dirname(repo.path()))
+        console.log("filename "+ filename)
+        return [repo, path.dirname(repo.path()), filename]
+    
     }
-
 }
 
 /**

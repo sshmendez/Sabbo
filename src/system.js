@@ -63,6 +63,7 @@ Sabbo.servepath = function(buildpath, appname, blob){
     appname = appname || appname
     return path.join(buildpath,`www/${appname}`,blob)
 }
+
 Sabbo.buildConfig = function (config) {
     config = Object.assign({}, config)
     if(!config.appname) throw {message: 'Appname must exist', name: 'AppnameException'}
@@ -91,20 +92,34 @@ Sabbo.exists = function(buildpath,appname, blob){
 Sabbo.initializeWorktree = async function (buildpath, appname, clonename, {branchname, commitid}) {
     let gitpath = Sabbo.gitpath(buildpath, appname)
     let clonepath = Sabbo.servepath(buildpath, appname, clonename)
-    return Git.Clone(gitpath, clonepath, {
-        fetchOpts: {
-            callbacks: {
-                certificateCheck: function () {
-                    // github will fail cert check on some OSX machines
-                    // this overrides that check
-                    return 0;
+    let repo;
+    try{
+        repo = await Git.Clone(gitpath, clonepath, {
+            fetchOpts: {
+                callbacks: {
+                    certificateCheck: function () {
+                        // github will fail cert check on some OSX machines
+                        // this overrides that check
+                        return 0;
+                    },
                 },
             },
-        },
-    })  
+        }) 
+    }
+    catch(err){
+        if(err.errorFunction == 'Clone.clone'){
+            let e = Error('Cloning '+appname+' failed')
+            e.name = 'CloneError'
+            throw e
+        }
+        throw err
+    }
+
+    return repo
+  
 }
-Sabbo.getPath =  function (config,blob) {
-    return path.join(config.servepath, blob)
+Sabbo.getpath =  function (blob) {
+    return path.join(Sabbo.servepath(), blob)
 }
 Sabbo.parseBlob = function (blob) {
     let sect = blob.split('1')
