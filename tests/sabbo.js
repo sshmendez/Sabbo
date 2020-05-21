@@ -4,6 +4,10 @@ let {
 let Git = require('nodegit')
 let fse = require('fs-extra')
 
+/**
+ * These tests were eventually moved into tools/GitHelpers.js
+ * They might now fail as sabbo has changed substantially
+ */
 function cleave_path(remote_ref) {
     let parts = remote_ref.split('/')
     let [remote_name, branch_name] = parts.slice(parts.length - 2)

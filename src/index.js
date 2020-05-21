@@ -11,17 +11,21 @@ const path = require("path");
 const send = require("koa-send");
 
 const local = path.resolve.bind('.', __dirname)
-
+console.log(local('system.js'))
 const { Sabbo } = require(local("system.js"));
-const Routes = require(local("tools/routes.js"));
+const {Routes} = require(local("tools/routes.js"));
 // add a route for uploading multiple files
 
 const configfile = "../build/build.conf";
 const buildpath = local("../build");
 
+const commandmap = {
+	'refs': Routes.getRefs,
+	'commits': Routes.getCommits
+}
 
 let defaultblob = (appname)=>{
-	return  Sabbo.blob("master", "HEAD")
+	return  Sabbo.blob(appname,"master", "HEAD")
 }
 let notpath = (notpathy)=>{
 	return notpathy == path.basename(notpathy)
@@ -37,45 +41,73 @@ let doubledot = (p)=>{
  */
 let globalSabbo =  ((buildpath,configs, defaultblob)=>{
 	return async (ctx, next)=>{
-		let {appname, blob} = ctx.request.body || ctx.params
-		blob = blob || defaultblob(appname)
+		let name_blob = ctx.params.appname || ctx.request.body.appname
+		console.log('appname:',name_blob)
+		let blob;
+		let {appname, branchname, commitid} = Sabbo.parseBlob(name_blob)
+		
+		if(appname)
+			blob = name_blob
 
-		let check = {appname, blob}
+		else{
+			blob = await defaultblob(name_blob);
+			console.log(blob);
+			({appname, branchname, commitid} = Sabbo.parseBlob(blob))
+		}
+
+
+		let check = {appname}
 		for(let attr in check){
 			if(!notpath(check[attr])){
+				debugger
 				ctx.body = 'Invalid '+attr+': '+check[attr]
 				return
 			}
 		}
-	
+		
 		configs.blob = configs.blob || {}
-
+		
 		ctx.sabbo = Object.assign(ctx.sabbo || {},{
-			config: configs.blob, buildpath, appname, blob
+			config: configs.blob, buildpath, appname,branchname, commitid, blob
 		})
+
 		
 		await next()
 	}
 })(buildpath,{},defaultblob)
     
 
-router.post("/create", koaBody, globalSabbo, (ctx,next)=>{
+router.post("/create", koaBody, globalSabbo, async (ctx,next)=>{
+
 	let {appname, buildpath} = ctx.sabbo
 	Routes.create({
 		buildpath,
 		appname,
-		clonepath: ctx.request.body.clonepath})
+		clonepath: ctx.request.body.clonepath},true)
+	ctx.body = 'Successfully created ' + appname
+	await next()
+
 });
 
-router.get("/demos/appname/", async (ctx,next)=>{
-	
+router.post('/demos/:appname/', koaBody, globalSabbo, async (ctx, next)=>{
+	let {buildpath,appname} = ctx.sabbo
+	let {command} = ctx.request.body
+
+	if(Object.keys(commandmap).indexOf(command) > -1)
+		ctx.body = await commandmap[command](ctx.sabbo,ctx.request.body)
+	else
+		ctx.body = 'Invalid Command ' + command
+
+
+	await next()
+
 })
+
 router.get("/demos/:appname/:filename(.*)", globalSabbo, async (ctx,next)=>{
 	console.log(ctx.params)
 	let dirpath,filename
 	try{
 		[_,dirpath,filename] = await Routes.getWorktreePath(ctx.sabbo,ctx.params.filename)
-		console.log(filename)
 	}
 	catch(err){
 		console.log(err)
@@ -85,13 +117,11 @@ router.get("/demos/:appname/:filename(.*)", globalSabbo, async (ctx,next)=>{
 	console.log(filename)
 	filename = filename || 'filename'
 	console.log(filename)
-	if(filename && !doubledot(filename))
+	if(filename && doubledot(filename))
 		ctx.body = 'Invalid Path ' + filename
 	else 
-	console.log(dirpath,filename)
-		await send(ctx, filename,
-			{root: dirpath});
-		console.log('sending')
+		await send(ctx, filename,{root: dirpath});
+
 	await next()
 });
 

@@ -51,7 +51,6 @@ module.exports = {
             .map(ref => this.cleaveRef(ref))
             .forEach(async ({remote_name, branch_name}) => {
                 try {
-                    debugger
                     await this.trackRemoteBranch(repo, remote_name, branch_name)
                 } catch (err) {
                     console.log(err)

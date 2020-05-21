@@ -1,40 +1,44 @@
+'use strict'
 const fse = require("fs-extra");
 const fstools = require("./tools/fstools.js")
 const Git = require("nodegit");
 const path = require("path");
 const GitHelpers = require("./tools/GitHelpers.js")
 const alphanum = /^[a-z0-9]+$/i;
-deprecationWarning =
+let deprecationWarning =
     process.env.NODE_ENV !== "production" ? console.warn : () => {};
-async function Sabbo(config, override, cloneUrl) {
-    if (override != undefined) deprecationWarning('override will be removed')
-    let gitpath = config.gitpath
-    let repo;
-    if (!cloneUrl) {
-        repo = await Git.Repository.init(gitpath, 1);
-    } else {
-        repo = await Git.Clone(cloneUrl, gitpath, {
-            bare: 1
-        })
-        GitHelpers.trackAll(repo)
-    }
 
-    fstools.mkdirs(config.servepath)
-    fse.writeFile(path.join(config.buildpath, Sabbo.canRemovePath), 1)
-    fse.writeFile(path.join(config.gitpath, Sabbo.canRemovePath), 1)
-    fse.writeFile(path.join(config.servepath, Sabbo.canRemovePath), 1)
-
-    return repo
+async function Sabbo(config, cloneUrl) {
+    deprecationWarning('override will be removed')
+    throw Error('Sabbo Depreciated')
 }
 
-login = function (user, pass) {
+let login = function (user, pass) {
     return {
         role: "admin",
         user,
         pass,
     };
 };
+Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
+    let repo;
 
+    if (!cloneUrl) {
+        repo = await Git.Repository.init(gitpath, 1);
+    } else {
+        repo = await Git.Clone(cloneUrl, gitpath, {
+            bare: 1
+        })
+        GitHelpers.trackAll(repo);
+    }
+
+    fstools.mkdirs(servepath);
+
+    let canremove = (root)=>path.join(root, Sabbo.canRemovePath);
+    [buildpath, servepath, gitpath].forEach(p=>fse.writeFileSync(canremove(p), 1));
+
+    return repo
+}
 Sabbo.canRemovePath = 'remove.sabbo'
 Sabbo.canRemove = function (desiredPath) {
     return fse.existsSync(path.join(desiredPath, Sabbo.canRemovePath))
@@ -68,9 +72,9 @@ Sabbo.buildConfig = function (config) {
     config = Object.assign({}, config)
     if(!config.appname) throw {message: 'Appname must exist', name: 'AppnameException'}
     let buildpath = config.buildpath || path.resolve("build");
-    build = path.join.bind(path, buildpath)
-    gitpath = Sabbo.gitpath(buildpath, config.appname);
-    servepath = Sabbo.servepath(buildpath, config.appname);
+    let build = path.join.bind(path, buildpath);
+    let gitpath = Sabbo.gitpath(buildpath, config.appname);
+    let servepath = Sabbo.servepath(buildpath, config.appname);
 
     Object.assign(config, {
         buildpath: build(),
@@ -89,7 +93,7 @@ Sabbo.exists = function(buildpath,appname, blob){
     return fse.existsSync(Sabbo.gitpath(buildpath,appname)) 
 
 }
-Sabbo.initializeWorktree = async function (buildpath, appname, clonename, {branchname, commitid}) {
+Sabbo.initializeWorktree = async function (buildpath, appname, clonename, branchname, commitid) {
     let gitpath = Sabbo.gitpath(buildpath, appname)
     let clonepath = Sabbo.servepath(buildpath, appname, clonename)
     let repo;
@@ -122,10 +126,13 @@ Sabbo.getpath =  function (blob) {
     return path.join(Sabbo.servepath(), blob)
 }
 Sabbo.parseBlob = function (blob) {
+    console.log(blob)
     let sect = blob.split('1')
+    if(sect.length < 3) return 0
     return {
-        branchname: sect.pop(),
-        commitid: sect.pop(),
+        appname: sect.shift(),
+        branchname: sect.shift(),
+        commitid: sect.shift(),
     };
 };
 /**
@@ -148,11 +155,21 @@ Sabbo.blob =  function () {
 
 
 }
-Sabbo.open = async function (buildpath, appname, blob) {
-
-    return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob))
+Sabbo.openWorkTree = async function ({buildpath, appname, blob}) {
+    return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob));
+}
+Sabbo.openBare = async function({buildpath, appname}){
+    return Git.Repository.open(Sabbo.gitpath(buildpath,appname))
 }
 
+Sabbo.getRefs = async function(buildpath, appname){
+    let repo = Sabbo.openBare(buildpath, appname)
+
+    refs = (await repo.getReferences()).map(ref=>{
+        GitHelpers.cleaveRef(ref.name())
+    })
+    
+}
 Sabbo.cleanup = async function (config, scratch) {
     if (scratch) {
         Sabbo.remove(config.buildpath)
@@ -178,15 +195,7 @@ Sabbo.cleanWorking = function (config, blobs) {
     })
 
 }
-Sabbo.addRoute = function (router, route) {
-    router.use(route, (ctx, next) => {
-        ctx.body = "added route";
-        next();
-    });
-};
-Sabbo.validDir = async function (dirname) {
-    return alphanum.test(dirname);
-};
+
 
 module.exports = {
     login,
