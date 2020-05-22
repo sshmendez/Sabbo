@@ -13,71 +13,36 @@ const send = require("koa-send");
 const local = path.resolve.bind('.', __dirname)
 console.log(local('system.js'))
 const { Sabbo } = require(local("system.js"));
-const {Routes} = require(local("tools/routes.js"));
+const {Routes, globalSabboBuilder} = require(local("tools/routes.js"));
+const GitHelpers = require(local('tools/GitHelpers'))
 // add a route for uploading multiple files
 
 const configfile = "../build/build.conf";
 const buildpath = local("../build");
+const worktree = {getWorkTree: true}
+
 
 const commandmap = {
-	'refs': Routes.getRefs,
-	'commits': Routes.getCommits
+	'refs': GitHelpers.getLocalReferences,
+	'commits': (repo, {oid, refname, numCommits})=>{
+
+	}
 }
 
 let defaultblob = (appname)=>{
 	return  Sabbo.blob(appname,"master", "HEAD")
 }
-let notpath = (notpathy)=>{
-	return notpathy == path.basename(notpathy)
-}
+
 let doubledot = (p)=>{
 	return p.indexOf('..') >= 0
 }
-/**
- * kindof a monolith
- * 
- * as a dev, I think buildpath can be considered safe, it isn't subject to change by the user
- * as a sec expert, I'm not a sec expert
- */
-let globalSabbo =  ((buildpath,configs, defaultblob)=>{
-	return async (ctx, next)=>{
-		let name_blob = ctx.params.appname || ctx.request.body.appname
-		console.log('appname:',name_blob)
-		let blob;
-		let {appname, branchname, commitid} = Sabbo.parseBlob(name_blob)
-		
-		if(appname)
-			blob = name_blob
 
-		else{
-			blob = await defaultblob(name_blob);
-			console.log(blob);
-			({appname, branchname, commitid} = Sabbo.parseBlob(blob))
-		}
+const isValidApp = (buildpath)=>{
+	return (appname)=>Sabbo.isValidBare(buildpath,appname)
+}
+const globalSabbo = globalSabboBuilder(buildpath,{},isValidApp(buildpath), defaultblob)
 
-
-		let check = {appname}
-		for(let attr in check){
-			if(!notpath(check[attr])){
-				debugger
-				ctx.body = 'Invalid '+attr+': '+check[attr]
-				return
-			}
-		}
-		
-		configs.blob = configs.blob || {}
-		
-		ctx.sabbo = Object.assign(ctx.sabbo || {},{
-			config: configs.blob, buildpath, appname,branchname, commitid, blob
-		})
-
-		
-		await next()
-	}
-})(buildpath,{},defaultblob)
-    
-
-router.post("/create", koaBody, globalSabbo, async (ctx,next)=>{
+router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
 
 	let {appname, buildpath} = ctx.sabbo
 	Routes.create({
@@ -89,7 +54,7 @@ router.post("/create", koaBody, globalSabbo, async (ctx,next)=>{
 
 });
 
-router.post('/demos/:appname/', koaBody, globalSabbo, async (ctx, next)=>{
+router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next)=>{
 	let {buildpath,appname} = ctx.sabbo
 	let {command} = ctx.request.body
 
@@ -103,7 +68,7 @@ router.post('/demos/:appname/', koaBody, globalSabbo, async (ctx, next)=>{
 
 })
 
-router.get("/demos/:appname/:filename(.*)", globalSabbo, async (ctx,next)=>{
+router.get("/demos/:appname/:filename(.*)", globalSabbo(worktree), async (ctx,next)=>{
 	console.log(ctx.params)
 	let dirpath,filename
 	try{

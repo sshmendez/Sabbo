@@ -36,6 +36,9 @@ module.exports = {
             branch_name
         }
     },
+    async getLocalReferences(repo){
+        return (await repo.getReferences()).filter(ref=>!ref.isRemote())
+    },
     async getRemoteReferences(repo) {
         let refs = await repo.getReferences()
         let remote_refs = refs
@@ -57,5 +60,48 @@ module.exports = {
                 }
             })
         return true
+    },
+    /**
+     * provides a generator to iterate over commits
+     */
+    async *getCommits(repo,commitconfig) {
+        let {refname, oid} = commitconfig || {};
+
+        let walk = repo.createRevWalk();
+        if(refname) walk.pushRef(refname);
+        else walk.push(oid || (await repo.getHeadCommit()));
+        do{
+            let oid;
+            try{
+                oid = await walk.next();
+            }
+            catch(err){
+                return
+            }
+            yield await repo.getCommit(oid);
+
+        }
+        while(true);
+
+    },
+    async getN(generator, n){
+        let done;
+        let value;
+        let vals = []
+        for(let i = 0; i < n, !done; i++){
+            ({value, done} = await generator.next())
+            if(!done) vals.push(value)
+        }
+        return vals
+    },
+    async getNCommits(repo, {oid, refname, nCommits}){
+		let comgen = GitHelpers.getCommits(repo, {oid, refname})
+		return await GitHelpers.getN(comgen, numCommits)
+
     }
+    /**
+     * Provides a generator to iterate over refs
+     */
+
+    
 }

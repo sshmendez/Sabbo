@@ -1,5 +1,9 @@
 {
   "name": "untitled",
+  "scripts": {
+    "serve": "node src/index.js",
+    "serve-auto": "find src test | entr -rc node src/index.js"
+  },
   "version": "1.0.0",
   "main": "index.js",
   "author": "Shane Mendez <shhmendez@gmail.com>",

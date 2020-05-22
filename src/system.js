@@ -33,7 +33,24 @@ Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
     return repo
 }
 
+/**
+ * Allow config to pass a blob or the branch and commit
+ * if branch exists, blob is ignored
+ * 
+ * this is a helper function, and will only function on a single machine system
+ */
+Sabbo.blob =  function () {
+    let raw = Object.values(arguments).filter((val) => !!val)
+    return raw.join('1')
+    blob = new Buffer
+        .from(JSON.stringify({
+            appname,
+            branch,
+            commit
+        }))
+        .toString("base64");
 
+}
 Sabbo.gitpath = function(buildpath, appname){
     return path.join(buildpath,`git/${appname}`)
 }
@@ -99,7 +116,6 @@ Sabbo.initializeWorktree = async function (buildpath, appname, clonename, branch
 }
 
 Sabbo.parseBlob = function (blob) {
-    console.log(blob)
     let sect = blob.split('1')
     if(sect.length < 3) return 0
     return {
@@ -108,6 +124,10 @@ Sabbo.parseBlob = function (blob) {
         commitid: sect.shift(),
     };
 };
+Sabbo.isValidBare =  ({buildpath, appname})=>{
+    let barepath = Sabbo.gitpath(buildpath, appname)
+    return fse.existsSync(barepath)
+}
 
 Sabbo.getWorktree = async ({buildpath, appname, branchname, commitid, blob})=>{
 

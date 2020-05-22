@@ -24,5 +24,8 @@ module.exports = {
             if (!fs.existsSync(p))
                 fs.mkdir(p)
         })
+    },
+    notpath: (notpathy)=>{
+        return notpathy == path.basename(notpathy)
     }
 }

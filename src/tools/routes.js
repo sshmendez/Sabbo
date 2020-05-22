@@ -48,60 +48,23 @@ let routes = {
         await Sabbo.create(config, clonepath);
         return config
     },
-    getWorktree: async ({buildpath, appname, branchname, commitid, blob})=>{
 
-        let repo;
-        if(!Sabbo.exists(buildpath, appname, blob)){
-            repo = Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)
-        }
-        else repo = Sabbo.open({buildpath, appname, blob})
-        return repo
-    },
     
     /**
      * filename is considered unsafe, therefore a path check is performed, and no path
      * is generated if a '..' or '/' is present
      */
     getWorktreePath: async function(sabboctx,filename){
-        let repo = await this.getWorktree(sabboctx)
+        let repo = await Sabbo.getWorktree(sabboctx)
         filename = filename || ''
         console.log('path ' + path.dirname(repo.path()))
         console.log("filename "+ filename)
         return [repo, path.dirname(repo.path()), filename]
     
     },
-    getRefs: async function({buildpath, appname}){
-        let repo = await Sabbo.openBare(buildpath, appname)
-        return (await repo.getReferences()).filter(ref=>!ref.isRemote()).map(ref=>ref.name())
-    }, 
 
-    /**
-     * Checks refname first, the startoid, and if nothing else, start getting commits from head
-     */
-    getCommits: async function*({buildpath, appname},commitConfig) {
-        let {refname, startoid} = commitConfig || {};
 
-        let commits = [];
-
-        let repo = await Sabbo.openBare({buildpath, appname});
-        let walk = repo.createRevWalk();
-        if(refname) walk.pushRef(refname);
-        else walk.push(startoid || (await repo.getHeadCommit()));
-
-        do{
-            let oid
-            try{
-                oid = await walk.next();
-            }
-            catch(err){
-                return
-            }
-            yield await repo.getCommit(oid);
-
-        }
-        while(true);
-
-    }
+ 
 }
 
 /**
@@ -134,6 +97,55 @@ function ftomid(func){
 // module.exports = Object.assign({}, 
 //     ...Object.keys(routes).map((fn)=>({[fn]: ftomid(routes[fn])})))
 
+
+
+
+/**
+ * kindof a monolith
+ * 
+ * as a dev, I think buildpath can be considered safe, it isn't subject to change by the user
+ * as a sec expert, I'm not a sec expert
+ */
+
+
+let getSabbo = (isValidApp, defaultblob, parseBlob)=>{
+        parseBlob = parseBlob || Sabbo.parseBlob
+        return async (name_blob)=>{
+            let blob;
+            if(!isValidApp(name_blob)) blob = name_blob;
+            else blob = await defaultblob(name_blob);
+            return Object.assign(parseBlob(blob),{blob})
+        }
+    }
+
+
+let globalSabboBuilder =  (buildpath,configs,deblob)=>
+	(wtconf)=>{
+        wtconf = wtconf
+		return async (ctx, next)=>{
+			let name_blob = ctx.params.appname || ctx.request.body.appname
+            let sabboctx = await deblob(name_blob);
+            if(wtconf.getWorkTree) repo = await Sabbo.getWorktree({buildpath, appname: sabboctx.appname});
+            ctx.sabbo = Object.assign(ctx.sabbo || {}, sabboctx)
+            Object.assign(ctx.sabbo, {repo})
+			await next()
+	}
+}
+
+let validate = ()=>{
+    let {appname, branchname, commitid} = arguments
+    let check = {appname};
+    for(let attr in check){
+        if(!notpath(check[attr])){
+            throw Error({name: 'InvalidPath',message:'Invalid '+attr+': '+check[attr]})
+        }
+    }
+    
+    return arguments
+}
+const isValidApp = (buildpath)=>{
+	return (appname)=>Sabbo.isValidBare({buildpath,appname})
+}
 /**
  * I don't think I want to export middleware, 
  * each of these functions requires too much different context
@@ -141,4 +153,4 @@ function ftomid(func){
  * If I was gonna create middleware, I would have to make a number of decisions and I don't want to 
  * think about that right now
  */
-module.exports = {Routes: routes}
+module.exports = {Routes: routes, globalSabboBuilder,getSabbo, isValidApp}
