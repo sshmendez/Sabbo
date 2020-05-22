@@ -4,22 +4,15 @@ const fstools = require("./tools/fstools.js")
 const Git = require("nodegit");
 const path = require("path");
 const GitHelpers = require("./tools/GitHelpers.js")
-const alphanum = /^[a-z0-9]+$/i;
-let deprecationWarning =
-    process.env.NODE_ENV !== "production" ? console.warn : () => {};
+
+Sabbo.canRemovePath = 'remove.sabbo'
+
 
 async function Sabbo(config, cloneUrl) {
-    deprecationWarning('override will be removed')
     throw Error('Sabbo Depreciated')
 }
 
-let login = function (user, pass) {
-    return {
-        role: "admin",
-        user,
-        pass,
-    };
-};
+
 Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
     let repo;
 
@@ -39,25 +32,7 @@ Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
 
     return repo
 }
-Sabbo.canRemovePath = 'remove.sabbo'
-Sabbo.canRemove = function (desiredPath) {
-    return fse.existsSync(path.join(desiredPath, Sabbo.canRemovePath))
-}
-/**
- * The removal checks should not be relied on
- * This was primarily added for testing
- * 
- * more stable and secure options include 
- *  running this in a docker instance
- *  running as a user with reduced privileges
- * 
- * be careful using this, it shouldn't be exposed to an api
- */
-Sabbo.remove = function(removePath){
-    if(Sabbo.canRemove(removePath)){
-        fse.removeSync(removePath)
-    }
-}
+
 
 Sabbo.gitpath = function(buildpath, appname){
     return path.join(buildpath,`git/${appname}`)
@@ -122,9 +97,7 @@ Sabbo.initializeWorktree = async function (buildpath, appname, clonename, branch
     return repo
   
 }
-Sabbo.getpath =  function (blob) {
-    return path.join(Sabbo.servepath(), blob)
-}
+
 Sabbo.parseBlob = function (blob) {
     console.log(blob)
     let sect = blob.split('1')
@@ -135,26 +108,17 @@ Sabbo.parseBlob = function (blob) {
         commitid: sect.shift(),
     };
 };
-/**
- * Allow config to pass a blob or the branch and commit
- * if branch exists, blob is ignored
- * 
- * this is a helper function, and will only function on a single machine system
- */
-Sabbo.blob =  function () {
-    let raw = Object.values(arguments).filter((val) => !!val)
-    return raw.join('1')
-    blob = new Buffer
-        .from(JSON.stringify({
-            appname,
-            branch,
-            commit
-        }))
-        .toString("base64");
 
+Sabbo.getWorktree = async ({buildpath, appname, branchname, commitid, blob})=>{
 
+    let repo;
+    if(!Sabbo.exists(buildpath, appname, blob)){
+        repo = Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)
+    }
+    else repo = Sabbo.openWorkTree({buildpath, appname, blob})
+    return repo
+},
 
-}
 Sabbo.openWorkTree = async function ({buildpath, appname, blob}) {
     return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob));
 }
@@ -162,22 +126,7 @@ Sabbo.openBare = async function({buildpath, appname}){
     return Git.Repository.open(Sabbo.gitpath(buildpath,appname))
 }
 
-Sabbo.getRefs = async function(buildpath, appname){
-    let repo = Sabbo.openBare(buildpath, appname)
 
-    refs = (await repo.getReferences()).map(ref=>{
-        GitHelpers.cleaveRef(ref.name())
-    })
-    
-}
-Sabbo.cleanup = async function (config, scratch) {
-    if (scratch) {
-        Sabbo.remove(config.buildpath)
-    } else {
-         Sabbo.cleanLocalBare(config)
-         Sabbo.cleanWorking(config)
-    }
-}
 Sabbo.cleanLocalBare = function ({
     gitpath
 }) {
@@ -190,14 +139,39 @@ Sabbo.cleanWorking = function (config, blobs) {
     else
         blobs = []
     blobs.forEach(blob => {
-        let worktree = Sabbo.getPath(config, blob)
+        let worktree = Sabbo.servepath(config, blob)
         Sabbo.remove(worktree)
     })
 
 }
+Sabbo.cleanup = async function (config, scratch) {
+    if (scratch) {
+        Sabbo.remove(config.buildpath)
+    } else {
+         Sabbo.cleanLocalBare(config)
+         Sabbo.cleanWorking(config)
+    }
+}
 
+Sabbo.canRemove = function (desiredPath) {
+    return fse.existsSync(path.join(desiredPath, Sabbo.canRemovePath))
+}
+/**
+ * The removal checks should not be relied on
+ * This was primarily added for testing
+ * 
+ * more stable and secure options include 
+ *  running this in a docker instance
+ *  running as a user with reduced privileges
+ * 
+ * be careful using this, it shouldn't be exposed to an api
+ */
+Sabbo.remove = function(removePath){
+    if(Sabbo.canRemove(removePath)){
+        fse.removeSync(removePath)
+    }
+}
 
 module.exports = {
-    login,
     Sabbo,
 };
