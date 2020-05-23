@@ -88,7 +88,7 @@ Sabbo.exists = function(buildpath,appname, blob){
 Sabbo.initializeWorktree = async function (buildpath, appname, clonename, branchname, commitid) {
     let gitpath = Sabbo.gitpath(buildpath, appname)
     let clonepath = Sabbo.servepath(buildpath, appname, clonename)
-    let repo;
+    let  repo;
     try{
         repo = await Git.Clone(gitpath, clonepath, {
             fetchOpts: {
@@ -130,7 +130,6 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
 }
 
 Sabbo.getWorktree = async ({buildpath, appname, branchname, commitid, blob})=>{
-
     let repo;
     if(!Sabbo.exists(buildpath, appname, blob)){
         repo = Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)

@@ -36,8 +36,14 @@ module.exports = {
             branch_name
         }
     },
+    /**
+     * Throws error if (await getRefs()).filter ... idk?
+     * "Unable to lock file for writing..."
+     */
     async getLocalReferences(repo){
-        return (await repo.getReferences()).filter(ref=>!ref.isRemote())
+        let refs =  await repo.getReferences()
+        let locals = refs.filter(ref=>!ref.isRemote())
+        return locals
     },
     async getRemoteReferences(repo) {
         let refs = await repo.getReferences()

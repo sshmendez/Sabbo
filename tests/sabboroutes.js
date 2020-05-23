@@ -16,13 +16,16 @@ Sabbo.cleanup({buildpath}, true)
 
 
 let tests = {
+    async getRefs(repo,config){
+        let refs =  await repo.getReferences()
+        let locals = refs.filter(ref=>!ref.isRemote())
+        return (locals.map(ref=>ref.name()))
+    },
     async tooBig(repo, config){
         let {buildpath, appname} = config
 
         refs = (await repo.getReferences()).map(ref=>ref.name())
-        
         let worktree = await Sabbo.getWorktree(config)
-
         return await GitHelpers.getLocalReferences(worktree)
 
 
@@ -74,8 +77,8 @@ let tests = {
         let worktree = await Sabbo.getWorktree({buildpath, appname, blob})
  
         assert(worktree.workdir() == truth.worktree.workdir())
-
-        return repo
+        
+        return repo.workdir()
     }
 }
 let run = (async ()=>{
@@ -88,6 +91,7 @@ let run = (async ()=>{
         commitid: 'HEAD',
         blob: Sabbo.blob(appname, 'master', 'HEAD'),
     }
+    let truth = {}
     config.name_blob = config.blob
 
     config.parsed_blob = Sabbo.parseBlob(config.blob)
@@ -99,7 +103,8 @@ let run = (async ()=>{
             console.log(test,": ",val)
         } 
         catch(err){ 
-            console.log(err)
+            // throw err
+            // console.log(err)
         }
     }
 })()
