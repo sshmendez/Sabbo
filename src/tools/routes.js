@@ -121,11 +121,12 @@ let getSabbo = (isValidApp, defaultblob, parseBlob)=>{
 
 let globalSabboBuilder =  (buildpath,configs,deblob)=>
 	(wtconf)=>{
-        wtconf = wtconf
+        wtconf = wtconf || {}
 		return async (ctx, next)=>{
 			let name_blob = ctx.params.appname || ctx.request.body.appname
             let sabboctx = await deblob(name_blob);
-            if(wtconf.getWorkTree) repo = await Sabbo.getWorktree({buildpath, appname: sabboctx.appname});
+            let {appname, blob} = sabboctx
+            if(wtconf.getWorkTree) repo = await Sabbo.getWorktree({buildpath, appname, blob});
             ctx.sabbo = Object.assign(ctx.sabbo || {}, sabboctx)
             Object.assign(ctx.sabbo, {repo})
 			await next()

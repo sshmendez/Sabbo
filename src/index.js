@@ -13,7 +13,7 @@ const send = require("koa-send");
 const local = path.resolve.bind('.', __dirname)
 console.log(local('system.js'))
 const { Sabbo } = require(local("system.js"));
-const {Routes, globalSabboBuilder} = require(local("tools/routes.js"));
+const {Routes, globalSabboBuilder, getSabbo} = require(local("tools/routes.js"));
 const GitHelpers = require(local('tools/GitHelpers'))
 // add a route for uploading multiple files
 
@@ -40,7 +40,9 @@ let doubledot = (p)=>{
 const isValidApp = (buildpath)=>{
 	return (appname)=>Sabbo.isValidBare(buildpath,appname)
 }
-const globalSabbo = globalSabboBuilder(buildpath,{},isValidApp(buildpath), defaultblob)
+
+const deblob = getSabbo(isValidApp, defaultblob, Sabbo.parseBlob)
+const globalSabbo = globalSabboBuilder(buildpath,{},deblob)
 
 router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
 
@@ -69,23 +71,14 @@ router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next
 })
 
 router.get("/demos/:appname/:filename(.*)", globalSabbo(worktree), async (ctx,next)=>{
+	debugger
 	console.log(ctx.params)
-	let dirpath,filename
-	try{
-		[_,dirpath,filename] = await Routes.getWorktreePath(ctx.sabbo,ctx.params.filename)
-	}
-	catch(err){
-		console.log(err)
-		await next()
-		return
-	}
-	console.log(filename)
-	filename = filename || 'filename'
-	console.log(filename)
+	let filename = ctx.params.filename
+
 	if(filename && doubledot(filename))
 		ctx.body = 'Invalid Path ' + filename
 	else 
-		await send(ctx, filename,{root: dirpath});
+		await send(ctx, filename,{root: ctx.sabbo.repo.workdir()});
 
 	await next()
 });
