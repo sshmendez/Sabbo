@@ -22,13 +22,6 @@ const buildpath = local("../build");
 const worktree = {getWorkTree: true}
 
 
-const commandmap = {
-	'refs': GitHelpers.getLocalReferences,
-	'commits': (repo, {oid, refname, numCommits})=>{
-
-	}
-}
-
 let defaultblob = (appname)=>{
 	return  Sabbo.blob(appname,"master", "HEAD")
 }
@@ -45,7 +38,6 @@ const deblob = getSabbo(isValidApp, defaultblob, Sabbo.parseBlob)
 const globalSabbo = globalSabboBuilder(buildpath,{},deblob)
 
 router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
-
 	let {appname, buildpath} = ctx.sabbo
 	Routes.create({
 		buildpath,
@@ -56,19 +48,6 @@ router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
 
 });
 
-router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next)=>{
-	let {buildpath,appname} = ctx.sabbo
-	let {command} = ctx.request.body
-
-	if(Object.keys(commandmap).indexOf(command) > -1)
-		ctx.body = await commandmap[command](ctx.sabbo,ctx.request.body)
-	else
-		ctx.body = 'Invalid Command ' + command
-
-
-	await next()
-
-})
 
 router.get("/demos/:appname/:filename(.*)", globalSabbo(worktree), async (ctx,next)=>{
 	debugger
@@ -95,8 +74,9 @@ app.use(async (ctx, next) => {
 	await next();
 });
 
-console.log("starting: ");
+let port = 3000
+console.log(`starting on port ${port}: `);
 Sabbo.remove(Sabbo.servepath(buildpath));
 // start the server
-app.listen(3000);
+app.listen(port);
 ``;
