@@ -2,42 +2,44 @@ let Git = require('nodegit')
 let path = require('path')
 
 module.exports = {
-    async trackRemoteBranch(repo, remote_name, branch_name) {
+    async trackRemoteBranch(repo, remotename, branchname) {
 
-        let remote_path = path.join(remote_name, branch_name)
-
-        let branch_commit = await repo.getBranchCommit(remote_path)
+        let remote_path = path.join(remotename, branchname);
+        let branch_commit = await repo.getBranchCommit(remote_path);
         let branch_ref;
         try{
-            branch_ref = await repo.createBranch(branch_name, branch_commit)
+            branch_ref = await repo.createBranch(branchname, branch_commit);
         }
         catch(err){
-            if(err.errno != -4) throw err
-            branch_ref = await repo.getBranch(branch_name)
+            /**
+             * Branch Exists
+             */
+            if(err.errno != -4) throw err;
+            branch_ref = await repo.getBranch(branchname);
         }
-        await Git.Branch.setUpstream(branch_ref, remote_path)
-        return true
+        await Git.Branch.setUpstream(branch_ref, remote_path);
+        return true;
 
     },
     /**
      * refs/remotes/origin/master =>
      * {
-     *  remote_name: origin,
-     *  branch_name: master,
+     *  remotename: origin,
+     *  branchname: master,
      * }
      *  Todo: find more universal solution, 
      *  Not sure if this is always the ref name structure
      */
     cleaveRef(remote_ref) {
         let parts = remote_ref.split('/')
-        let [remote_name, branch_name] = parts.slice(parts.length - 2)
+        let [remotename, branchname] = parts.slice(parts.length - 2)
         return {
-            remote_name,
-            branch_name
+            remotename,
+            branchname
         }
     },
     /**
-     * Throws error if (await getRefs()).filter ... idk?
+     * Throws error if written like: (await getRefs()).filter
      * "Unable to lock file for writing..."
      */
     async getLocalReferences(repo){
@@ -53,29 +55,45 @@ module.exports = {
     },
     /**
      * Todo: handle exceptions or neatly allow them
+     * I haven't encountered any serious errors up to this point
      */
     async trackAll(repo) {
-        (await this.getRemoteReferences(repo))
+        let cleaved = (await this.getRemoteReferences(repo))
             .map(ref => ref.name())
             .map(ref => this.cleaveRef(ref))
-            .forEach(async ({remote_name, branch_name}) => {
+        let track = (async ({remotename, branchname}) => {
                 try {
-                    await this.trackRemoteBranch(repo, remote_name, branch_name)
+                    await this.trackRemoteBranch(repo, remotename, branchname);
                 } catch (err) {
-                    console.log(err)
+                    console.log(err);
                 }
             })
+        for(ref of cleaved){
+            await track(ref)
+        }
         return true
     },
     /**
      * provides a generator to iterate over commits
+     * Revwalkers take a starting point before they begin walking
+     * that starting point is commitish; either a commit obj, oid, or oid-string
+     * 
+     * @param commitconfig 
+     * {
+     *  refname: valid ref in repo
+     *  oid: valid commit oid in repo
+     * }
+     * the walker starts from either 
+     *  oid, refname.head; checking in that order
+     * if neither is specified the repos head commit is used
      */
     async *getCommits(repo,commitconfig) {
         let {refname, oid} = commitconfig || {};
 
         let walk = repo.createRevWalk();
-        if(refname) walk.pushRef(refname);
-        else walk.push(oid || (await repo.getHeadCommit()));
+        if(oid) walk.push(oid)
+        else if(refname) walk.pushRef(refname);
+        else walk.push((await repo.getHeadCommit()));
         do{
             let oid;
             try{
@@ -90,17 +108,26 @@ module.exports = {
         while(true);
 
     },
+    /**
+     * probably creating tools/itertools 
+     */
     async getN(generator, n){
         let done;
         let value;
+        let all = n == undefined
         let vals = []
-        for(let i = 0; i < n, !done; i++){
+        for(let i = 0; i < n || all, !done; i++){
             ({value, done} = await generator.next())
             if(!done) vals.push(value)
         }
         return vals
     },
+    /**
+     *  depreciating
+     */
     async getNCommits(repo, {oid, refname, nCommits}){
+        process.emitWarning('getNCommits will soon be removed from GitHelpers'+
+         'please stop using it to avoid failures in the future')
 		let comgen = GitHelpers.getCommits(repo, {oid, refname})
 		return await GitHelpers.getN(comgen, numCommits)
 

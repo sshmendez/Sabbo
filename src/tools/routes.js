@@ -45,8 +45,7 @@ let routes = {
         if(Sabbo.exists(buildpath,appname) && override){
             await Sabbo.cleanup(config, false)
         }
-        await Sabbo.create(config, clonepath);
-        return config
+        return await Sabbo.create(config, clonepath);
     },
 
     
@@ -122,13 +121,14 @@ let getSabbo = (isValidApp, defaultblob, parseBlob)=>{
 let globalSabboBuilder =  (buildpath,configs,deblob)=>
 	(wtconf)=>{
         wtconf = wtconf || {}
+        let repo;
 		return async (ctx, next)=>{
-			let name_blob = ctx.params.appname || ctx.request.body.appname
+            let name_blob = ctx.params.appname || ctx.request.body.appname
             let sabboctx = await deblob(name_blob);
             let {appname, blob} = sabboctx
             if(wtconf.getWorkTree) repo = await Sabbo.getWorktree({buildpath, appname, blob});
             ctx.sabbo = Object.assign(ctx.sabbo || {}, sabboctx)
-            Object.assign(ctx.sabbo, {repo})
+            if(repo) ctx.sabbo.repo = repo
 			await next()
 	}
 }

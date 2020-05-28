@@ -1,99 +1,51 @@
 let {
     Sabbo
 } = require('../src/system.js')
+let path = require('path')
 let Git = require('nodegit')
+const {Branch} = Git
+
+
+
 let fse = require('fs-extra')
 
+let local = path.resolve.bind(__dirname,'src')
+console.log(local())
+let {cleave_path} =require(local('tools/GitHelpers.js'))
 /**
  * These tests were eventually moved into tools/GitHelpers.js
  * They might now fail as sabbo has changed substantially
  */
-function cleave_path(remote_ref) {
-    let parts = remote_ref.split('/')
-    let [remote_name, branch_name] = parts.slice(parts.length - 2)
-    return {
-        remote_name,
-        branch_name
-    }
-}
+
 let tests = {
     async init(config, testconfig, ctx) {
-        const {
-            Branch
-        } = require('nodegit')
-        let bare = await Sabbo(config, true, config.cloneFrom)
+        let {buildpath,gitpath, servepath, appname, branchname, commitid} = config
 
-        let {
-            appname,
-            branch,
-            commitid
-        } = config
-        let blob = await Sabbo.blob(appname, branch, commitid)
-        let repo;
-        console.log('created blob ' + blob)
-        try {
-            console.log(config.servepath)
-            repo = await Sabbo.initializeSrc(config, blob)
+        gitpath = gitpath || Sabbo.gitpath(buildpath, appname)
 
-        } catch (err) {
-            console.log(err)
+        let bare;
+        
+        if(Sabbo.exists(buildpath, appname)){
+            bare = Sabbo.openBare({buildpath, appname})
         }
-        // console.log(await bare.getReferences(3))
-    },
-
-    async track_branch(config, {
-        remote_name,
-        branch_name
-    }, ctx) {
-        let {
-            Branch,
-        } = require('nodegit')
-        let path = require('path')
-
-        let bare = await Git.Repository.open(config.gitpath)
-        let remote_path = path.join(remote_name, branch_name)
-
-        let branch_commit = await bare.getBranchCommit(remote_path)
-        let branch_ref = await bare.createBranch(branch_name, branch_commit)
-        await Branch.setUpstream(branch_ref, remote_path)
-
-
-    },
-
-    async getAllRefNames(config, testconfig, ctx) {
-        let bare = await Git.Repository.open(config.gitpath)
-        let refs = await bare.getReferenceNames(3)
-        console.log(refs)
-        return {
-            refs
+        else{
+            /**
+             * 
+             */
+            bare = await Sabbo.create({buildpath, servepath: Sabbo.servepath(buildpath, appname, ''), gitpath}, config.cloneFrom)
         }
+        ctx.bare = bare
     },
-    async getRemoteRefs(config, testconfig, ctx) {
-        let bare = await Git.Repository.open(config.gitpath)
-        let refs = await bare.getReferences()
-        let remote_refs = refs
-            .filter((ref) => ref.isRemote())
-            .map(ref => ref.name())
-        console.log(remote_refs)
-        return {
-            remote_refs
-        }
-    },
+    async cloneTest(config, testconfig, ctx){
+        let {buildpath, appname, branchname, commitid, blob} = config;
 
-    async track_all(config, testconfig, ctx) {
-        let {
-            remote_refs
-        } = ctx
-        let refs = remote_refs.map(ref =>
-            cleave_path(ref))
-        refs.forEach(async ref => {
-            try {
-                await this.track_branch(config, ref)
-            } catch (err) {
-            }
-        })
-        return true
-    },
+        
+        await Sabbo.cleanWorking({buildpath, appname}, blob)
+        let cloned = await Sabbo.clone({buildpath, appname})
+        // let worktree = Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)
+
+
+    }
 };
 
 
@@ -102,12 +54,25 @@ async function run(tests) {
 
     let config = {
         appname: 'te8st3',
-        branch: 'master',
+        branchname: 'master',
         commitid: 'head',
-        cloneFrom: '/Users/mendez/dev/proj/workspace/modulethief'
+        cloneFrom: local('../tests/testrepo'),
+        buildpath: local('../build')
 
     }
-    config = Sabbo.buildConfig(config)
+
+    config.blob = Sabbo.defaultBlob({appname: config.appname})
+    config.servepath = Sabbo.servepath(config.buildpath, config.appname, config.blob)
+    config.gitpath = Sabbo.gitpath(config.buildpath, config.appname)
+
+    await Sabbo.cleanup(config, 1)
+    /**
+     * Only in cases of failure
+     * Sabbo is not atomic, if building fails, you must either manually add a
+     * remove.sabbo file to the buildpath or force delete it
+     * be safe, especially if you haven't committed in about 2 days and your name is shane
+     */
+    // fse.removeSync(config.buildpath)
     console.log(config)
     let testconfigs = {
         'track_branch': {
@@ -116,9 +81,6 @@ async function run(tests) {
         },
 
     }
-    console.log("Cleaning up")
-    fse.remove(config.gitpath)
-    fse.remove(config.servepath)
     let ctx = {}
     for (let test in tests) {
         let testconfig = testconfigs[test] || {}

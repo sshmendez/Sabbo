@@ -6,29 +6,27 @@ const path = require("path");
 const GitHelpers = require("./tools/GitHelpers.js")
 
 Sabbo.canRemovePath = 'remove.sabbo'
+let _makeRemovable = (dir)=>fse.writeFileSync(path.join(dir, Sabbo.canRemovePath), 1);
 
 
 async function Sabbo(config, cloneUrl) {
-    throw Error('Sabbo Depreciated')
+    throw Error('Sabbo Depreciated, use Sabbo.create instead')
 }
 
 
 Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
     let repo;
-
     if (!cloneUrl) {
         repo = await Git.Repository.init(gitpath, 1);
     } else {
         repo = await Git.Clone(cloneUrl, gitpath, {
             bare: 1
         })
-        GitHelpers.trackAll(repo);
+        await GitHelpers.trackAll(repo);
     }
-
     fstools.mkdirs(servepath);
 
-    let canremove = (root)=>path.join(root, Sabbo.canRemovePath);
-    [buildpath, servepath, gitpath].forEach(p=>fse.writeFileSync(canremove(p), 1));
+    [buildpath, servepath, gitpath].forEach(p=>_makeRemovable(p));
 
     return repo
 }
@@ -41,7 +39,7 @@ Sabbo.create = async ({buildpath, servepath, gitpath},cloneUrl)=>{
  */
 Sabbo.blob =  function () {
     let raw = Object.values(arguments).filter((val) => !!val)
-    return raw.join('1')
+    return raw.join(';')
     blob = new Buffer
         .from(JSON.stringify({
             appname,
@@ -55,7 +53,7 @@ Sabbo.gitpath = function(buildpath, appname){
     return path.join(buildpath,`git/${appname}`)
 }
 Sabbo.servepath = function(buildpath, appname, blob){
-    blob = blob || ''
+    blob = blob
     appname = appname || appname
     return path.join(buildpath,`www/${appname}`,blob)
 }
@@ -66,7 +64,7 @@ Sabbo.buildConfig = function (config) {
     let buildpath = config.buildpath || path.resolve("build");
     let build = path.join.bind(path, buildpath);
     let gitpath = Sabbo.gitpath(buildpath, config.appname);
-    let servepath = Sabbo.servepath(buildpath, config.appname);
+    let servepath = Sabbo.servepath(buildpath, config.appname, '');
 
     Object.assign(config, {
         buildpath: build(),
@@ -85,38 +83,65 @@ Sabbo.exists = function(buildpath,appname, blob){
     return fse.existsSync(Sabbo.gitpath(buildpath,appname)) 
 
 }
-Sabbo.initializeWorktree = async function (buildpath, appname, clonename, branchname, commitid) {
-    let gitpath = Sabbo.gitpath(buildpath, appname)
-    let clonepath = Sabbo.servepath(buildpath, appname, clonename)
-    let  repo;
-    try{
-        repo = await Git.Clone(gitpath, clonepath, {
-            fetchOpts: {
-                callbacks: {
-                    certificateCheck: function () {
-                        // github will fail cert check on some OSX machines
-                        // this overrides that check
-                        return 0;
-                    },
-                },
+Sabbo.defaultBlob = function ({appname}){
+    return Sabbo.blob(appname, 'master','HEAD')
+}
+Sabbo.defaultPaths = async function ({buildpath, appname}){
+    let blob = Sabbo.defaultBlob({appname})
+    return {
+        gitpath: Sabbo.gitpath(buildpath, appname),
+        servepath: Sabbo.servepath(buildpath, appname,blob)
+    }
+}
+
+Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitid) {
+
+    let cloneargs = {
+        checkoutBranch: branchname
+    }
+    let repo;
+
+    cloneargs = cloneargs || {}
+
+    Object.apply({},cloneargs,{fetchOpts: {
+        callbacks: {
+            certificateCheck: function () {
+                // github will fail cert check on some OSX machines
+                // this overrides that check
+                return 0;
             },
-        }) 
+        },
+    }})
+
+    try{
+        repo = await Git.Clone(gitpath, servepath, cloneargs)
     }
     catch(err){
         if(err.errorFunction == 'Clone.clone'){
-            let e = Error('Cloning '+appname+' failed')
+            let e = Error('Cloning '+gitpath+' failed: '+err.message)
             e.name = 'CloneError'
             throw e
         }
         throw err
     }
-
+    
+    /**
+     * Checkout branch, then detach head to commit
+     */
+    console.log((await GitHelpers.getLocalReferences(repo)).map(r=>r.name()))
+    let headcommit = await repo.getBranchCommit(branchname)
+    if(commitid == 'HEAD'){
+        commitid = headcommit.id()
+    }
+    if(commitid != headcommit.id()) repo.setHeadDetached(commitid)
     return repo
+
+
   
 }
 
 Sabbo.parseBlob = function (blob) {
-    let sect = blob.split('1')
+    let sect = blob.split(';')
     if(sect.length < 3) return 0
     return {
         appname: sect.shift(),
@@ -129,15 +154,29 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
     return fse.existsSync(barepath)
 }
 
-Sabbo.getWorktree = async ({buildpath, appname, branchname, commitid, blob})=>{
+Sabbo.getWorktree = async ({buildpath, gitpath, servepath, appname, branchname, commitid, blob})=>{
     let repo;
+    
+    gitpath = gitpath || Sabbo.gitpath(buildpath, appname)
+    servepath = servepath || Sabbo.servepath(buildpath, appname,blob)
+
     if(!Sabbo.exists(buildpath, appname, blob)){
-        repo = Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)
+        repo = Sabbo.initializeWorktree(gitpath, servepath, branchname, commitid)
     }
     else repo = Sabbo.openWorkTree({buildpath, appname, blob})
     return repo
 },
 
+Sabbo.listWorkTrees = async(appname, servepath)=>{
+    let publicApp = path.join(servepath, appname)
+    return fse.readdir(publicApp)
+}
+/**
+ * Maybe Write a function that returns worktrees; not sure if this is an api function or Sabbo
+ */
+// Sabbo.listWorktrees = async function ({appname, servepath}) {
+//     fse.ls
+// }
 Sabbo.openWorkTree = async function ({buildpath, appname, blob}) {
     return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob));
 }
@@ -151,25 +190,30 @@ Sabbo.cleanLocalBare = function ({
 }) {
     Sabbo.remove(gitpath)
 }
-
-Sabbo.cleanWorking = function (config, blobs) {
+Sabbo.cleanPublic = function({buildpath, appname}){
+    return Sabbo.cleanWorktrees({buildpath, appname}, '')
+}
+Sabbo.cleanWorktrees = function ({buildpath, appname}, blobs) {
     if (blobs)
         blobs = blobs instanceof Array ? blobs : [blobs]
     else
         blobs = []
-    blobs.forEach(blob => {
-        let worktree = Sabbo.servepath(config, blob)
+    
+    blobs.filter(b=>!!b).forEach(blob => {
+        let worktree = Sabbo.servepath(buildpath, appname, blob)
         Sabbo.remove(worktree)
     })
 
 }
-Sabbo.cleanup = async function (config, scratch) {
-    if (scratch) {
-        Sabbo.remove(config.buildpath)
-    } else {
-         Sabbo.cleanLocalBare(config)
-         Sabbo.cleanWorking(config)
-    }
+/**
+ * Be safe with force please!
+ */
+Sabbo.cleanupForce = async function({buildpath}){
+    fse.removeSync(buildpath)
+}
+
+Sabbo.cleanup = async function ({buildpath}) {
+    Sabbo.remove(buildpath)
 }
 
 Sabbo.canRemove = function (desiredPath) {
@@ -186,7 +230,7 @@ Sabbo.canRemove = function (desiredPath) {
  * be careful using this, it shouldn't be exposed to an api
  */
 Sabbo.remove = function(removePath){
-    if(Sabbo.canRemove(removePath)){
+    if(Sabbo.canRemove(removePath) || Sabbo.canRemove(path.resolve(removePath, '..'))){
         fse.removeSync(removePath)
     }
 }

@@ -23,11 +23,10 @@ const worktree = {getWorkTree: true}
 
 
 const commandmap = {
-	'refs': GitHelpers.getLocalReferences,
-	'commits': (repo, {oid, refname, numCommits})=>{
-
-	}
+	'blob': ({appname, branchname, commitid})=>Sabbo.blob(appname,branchname, commitid)
 }
+
+
 
 let defaultblob = (appname)=>{
 	return  Sabbo.blob(appname,"master", "HEAD")
@@ -38,10 +37,10 @@ let doubledot = (p)=>{
 }
 
 const isValidApp = (buildpath)=>{
-	return (appname)=>Sabbo.isValidBare(buildpath,appname)
+	return (appname)=>Sabbo.isValidBare({buildpath,appname})
 }
 
-const deblob = getSabbo(isValidApp, defaultblob, Sabbo.parseBlob)
+const deblob = getSabbo(isValidApp(buildpath), defaultblob, Sabbo.parseBlob)
 const globalSabbo = globalSabboBuilder(buildpath,{},deblob)
 
 router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
@@ -73,12 +72,9 @@ router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next
 router.get("/demos/:appname/:filename(.*)", globalSabbo(worktree), async (ctx,next)=>{
 	debugger
 	console.log(ctx.params)
-	let filename = ctx.params.filename
-
-	if(filename && doubledot(filename))
-		ctx.body = 'Invalid Path ' + filename
-	else 
-		await send(ctx, filename,{root: ctx.sabbo.repo.workdir()});
+	let filename = ctx.params.filename || 'src/index.js'
+	
+	await send(ctx, filename,{root: ctx.sabbo.repo.workdir()});
 
 	await next()
 });
@@ -99,4 +95,3 @@ console.log("starting: ");
 Sabbo.remove(Sabbo.servepath(buildpath));
 // start the server
 app.listen(3000);
-``;
