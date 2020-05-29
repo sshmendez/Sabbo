@@ -131,9 +131,19 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
     console.log((await GitHelpers.getLocalReferences(repo)).map(r=>r.name()))
     let headcommit = await repo.getBranchCommit(branchname)
     if(commitid == 'HEAD'){
-        commitid = headcommit.id()
+        commitid = String(headcommit.id())
     }
-    if(commitid != headcommit.id()) repo.setHeadDetached(commitid)
+    if(commitid != String(headcommit.id())){
+        let opts =  {};
+        let reference = await repo.getReference(branchname)
+        debugger
+        opts.checkoutStrategy =  Git.Checkout.STRATEGY.SAFE | Git.Checkout.STRATEGY.RECREATE_MISSING;
+        repo.setHeadDetached(commitid)
+        let commit = await repo.getHeadCommit()
+        let tree = await commit.getTree()
+        Git.Checkout.tree(repo, tree, opts)
+
+    } 
     return repo
 
 

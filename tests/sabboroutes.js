@@ -15,18 +15,21 @@ tests = {
         let locals = refs.filter(ref=>!ref.isRemote())
         return (locals.map(ref=>ref.name()))
     },
-    async checkoutBranch({repo, config}){
+    async checkoutBranch({repo, config, localconfig}){
         let {buildpath, appname, branchname, commitid, blob} = config
         let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob})
         let localrefs = await GitHelpers.getLocalReferences(repo)
+        
+        let {checkoutRef} = localconfig
+
         try{
+            debugger
             await worktree.checkoutBranch('master')
         }
         catch(err){
             console.log(err)
         }
-        let hc = await worktree.getHeadCommit()
-        let bc = await worktree.getBranchCommit('master')
+        
     },
     async tooBig({repo, config}){
         return
@@ -158,7 +161,7 @@ let run = async (config, localconfigs, tests)=>{
         let msg = '-----------'+test+'-------------'
         console.log(msg)
         let conf = {
-            repo,config,localconf: localconf[test] || {}
+            repo,config,localconfig: localconfigs[test] || {}
         }
         try{
             val = await tests[test](conf)
@@ -192,10 +195,13 @@ config.parsed_blob = Sabbo.parseBlob(config.blob)
 let localconf = {
     cloneTest: {
         branchname: 'newbranch'
+    },
+    checkoutBranch: {
+        checkoutRef: 'origin/newbranch'
     }
 }
 
-let runtests = ['cloneAllBranchesAndCommits']
+let runtests = ['checkoutBranch']
 runtests = runtests || Object.keys(tests)
 runtests = runtests.map(t=>({[t]: tests[t]}))
 runtests = Object.assign({}, ...runtests)
