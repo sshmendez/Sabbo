@@ -2,6 +2,18 @@ let Git = require('nodegit')
 let path = require('path')
 
 module.exports = {
+    async parseRelativeCommit(repo, commitstring){
+        let parts = commitstring.split('~');
+        if(parts[0] != 'HEAD') throw {name: 'CommitParseError', message: 'Unable to parse '+commitstring};
+        let delta = parts[1] || 0;
+        
+        return delta
+
+    },
+    async relativeCommit(repo, delta){
+        if(delta != 0) throw Error('Currently Not Implemented')
+        return repo.getHeadCommit()
+    },
     async trackRemoteBranch(repo, remotename, branchname) {
 
         let remote_path = path.join(remotename, branchname);

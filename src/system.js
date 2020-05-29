@@ -93,32 +93,25 @@ Sabbo.defaultPaths = async function ({buildpath, appname}){
         servepath: Sabbo.servepath(buildpath, appname,blob)
     }
 }
-
 Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitid) {
 
-    let cloneargs = {
-        checkoutBranch: branchname
-    }
     let repo;
 
-    cloneargs = cloneargs || {}
-
-    Object.apply({},cloneargs,{fetchOpts: {
+    let cloneargs = {checkoutBranch: branchname,fetchOpts: {
         callbacks: {
             certificateCheck: function () {
-                // github will fail cert check on some OSX machines
-                // this overrides that check
                 return 0;
             },
-        },
-    }})
+        }
+    }}
+
 
     try{
         repo = await Git.Clone(gitpath, servepath, cloneargs)
     }
     catch(err){
         if(err.errorFunction == 'Clone.clone'){
-            let e = Error('Cloning '+gitpath+' failed: '+err.message)
+            let e = Error('Cloning '+gitpath+' failed: '+err.message)   
             e.name = 'CloneError'
             throw e
         }
@@ -128,15 +121,20 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
     /**
      * Checkout branch, then detach head to commit
      */
+    debugger
     console.log((await GitHelpers.getLocalReferences(repo)).map(r=>r.name()))
     let headcommit = await repo.getBranchCommit(branchname)
-    if(commitid == 'HEAD'){
-        commitid = String(headcommit.id())
-    }
+
     if(commitid != String(headcommit.id())){
+        /**
+         * As of now I am deleting the clone and throwing an error in this case
+         * in the future I want this to work as intended
+         */
+        fse.remove(servepath)
+        throw Error('Not Implemented')
+ 
         let opts =  {};
         let reference = await repo.getReference(branchname)
-        debugger
         opts.checkoutStrategy =  Git.Checkout.STRATEGY.SAFE | Git.Checkout.STRATEGY.RECREATE_MISSING;
         repo.setHeadDetached(commitid)
         let commit = await repo.getHeadCommit()

@@ -6,7 +6,7 @@ const local = path.resolve.bind(__dirname,'src')
 const { Sabbo } = require(local('system.js'));
 const {Routes, globalSabbo, isValidApp, getSabbo} = require(local("tools/routes.js"));
 const GitHelpers = require(local("tools/GitHelpers.js"))
-const buildpath = local('../build')
+const buildpath = local('../../build')
 
 let tests;
 tests = {
@@ -110,6 +110,19 @@ tests = {
             }
         }
     }, 
+    async cloneAllBranches({repo, config}){
+        let {buildpath,gitpath, appname} = config
+        let localrefs = await GitHelpers.getLocalReferences(repo)
+        debugger
+        for(let ref of localrefs){
+            let {branchname} = GitHelpers.cleaveRef(ref.name())
+            let commitid = String(await repo.getBranchCommit(branchname))
+            let blob = Sabbo.blob(appname, branchname, commitid, 'cab')
+            let servepath = Sabbo.servepath(buildpath, appname, blob)
+            await Sabbo.getWorktree({buildpath, gitpath, servepath, appname, branchname, commitid, blob})
+
+        }
+    },
     async verifyFiles({repo, config}){
         return Sabbo.listWorkTrees(appname,config.servepath)
     },
@@ -187,8 +200,7 @@ let config = {
     blob: Sabbo.blob(appname, 'master', 'HEAD'),
 }
 
-config.servepath = Sabbo.servepath(config.buildpath, appname, '')
-config.gitpath = Sabbo.gitpath(config.buildpath, appname)
+
 config.name_blob = config.blob
 config.parsed_blob = Sabbo.parseBlob(config.blob)
 
@@ -201,7 +213,7 @@ let localconf = {
     }
 }
 
-let runtests = ['checkoutBranch']
+let runtests = ['getRefs', 'cloneAllBranches']
 runtests = runtests || Object.keys(tests)
 runtests = runtests.map(t=>({[t]: tests[t]}))
 runtests = Object.assign({}, ...runtests)
