@@ -23,7 +23,6 @@ tests = {
         let {checkoutRef} = localconfig
 
         try{
-            debugger
             await worktree.checkoutBranch('master')
         }
         catch(err){
@@ -81,15 +80,8 @@ tests = {
         while(!val.done);
         return true
     },
-    async cloneTest({repo,config, localconf}){
-        let {buildpath, appname, commitid, clonepath} = config
-        let {branchname} = localconf
-        let blob = Sabbo.blob(appname,branchname, commitid)
-        let worktree = await Sabbo.initializeWorktree(buildpath, appname, blob, branchname, commitid)
-        
-        return worktree
-    },
     async cloneAllBranchesAndCommits({repo, config}){
+        return
         let {buildpath, appname} = config
         let refcommits = await tests.getAllBranchesAndCommits({repo,config})
         let checkout = async (ref,commitid)=>{
@@ -113,7 +105,6 @@ tests = {
     async cloneAllBranches({repo, config}){
         let {buildpath,gitpath, appname} = config
         let localrefs = await GitHelpers.getLocalReferences(repo)
-        debugger
         for(let ref of localrefs){
             let {branchname} = GitHelpers.cleaveRef(ref.name())
             let commitid = String(await repo.getBranchCommit(branchname))
@@ -123,11 +114,14 @@ tests = {
 
         }
     },
-    async verifyFiles({repo, config}){
+    async verifyFiles({repo, config, localconfig}){
+        return
         return Sabbo.listWorkTrees(appname,config.servepath)
     },
-    async globalSabboTest({repo, config}){
+    async globalSabboTest({repo, config, localconfig}){
+        return
         let {buildpath, name_blob} = config
+
         let truth = {
             worktree: await Sabbo.getWorktree({buildpath, 
                 branchname: config.branchname,
@@ -136,6 +130,7 @@ tests = {
                 blob: config.blob}),
             deblob:   Object.assign({},config.parsed_blob,{blob: config.blob})
         }
+
         let validapp = isValidApp(buildpath)
         let defaultblob = (appname)=>{
             return  Sabbo.blob(appname,"master", "HEAD")
@@ -167,9 +162,16 @@ console.log(Sabbo.openBare)
 Sabbo.cleanup({buildpath}, true)
 
 let run = async (config, localconfigs, tests)=>{
-
     await Routes.create(config,true)
     let repo = await Sabbo.openBare(config)
+
+    config = Object.assign({},config)
+
+    config.commitid = await GitHelpers.relativeBranchCommit(repo, config.branchname, config.commitid)
+    config.commitid = String(config.commitid)
+
+    config.blob = Sabbo.blob(config.appname, config.branchname, config.commitid)
+
     for(test in tests){
         let msg = '-----------'+test+'-------------'
         console.log(msg)
@@ -181,7 +183,6 @@ let run = async (config, localconfigs, tests)=>{
             console.log(val)
         } 
         catch(err){ 
-            throw err
             console.log(err)
         }
         console.log('-'.repeat(msg.length))
@@ -196,13 +197,9 @@ let config = {
     appname,
     clonepath,
     branchname: 'master',
-    commitid: 'HEAD',
-    blob: Sabbo.blob(appname, 'master', 'HEAD'),
+    commitid: 'HEAD'
 }
 
-
-config.name_blob = config.blob
-config.parsed_blob = Sabbo.parseBlob(config.blob)
 
 let localconf = {
     cloneTest: {
@@ -212,8 +209,8 @@ let localconf = {
         checkoutRef: 'origin/newbranch'
     }
 }
-
-let runtests = ['getRefs', 'cloneAllBranches']
+let runtests;
+// runtests = ['getRefs', 'cloneAllBranches']
 runtests = runtests || Object.keys(tests)
 runtests = runtests.map(t=>({[t]: tests[t]}))
 runtests = Object.assign({}, ...runtests)

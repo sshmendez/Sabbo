@@ -121,7 +121,6 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
     /**
      * Checkout branch, then detach head to commit
      */
-    debugger
     console.log((await GitHelpers.getLocalReferences(repo)).map(r=>r.name()))
     let headcommit = await repo.getBranchCommit(branchname)
 

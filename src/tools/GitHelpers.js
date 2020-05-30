@@ -2,17 +2,43 @@ let Git = require('nodegit')
 let path = require('path')
 
 module.exports = {
-    async parseRelativeCommit(repo, commitstring){
+    parseRelativeCommit(commitstring){
         let parts = commitstring.split('~');
-        if(parts[0] != 'HEAD') throw {name: 'CommitParseError', message: 'Unable to parse '+commitstring};
+        if(parts[0] != 'HEAD') throw Object.assign(Error(), {name: 'CommitParseError', message: 'Unable to parse '+commitstring});
         let delta = parts[1] || 0;
-        
         return delta
 
     },
     async relativeCommit(repo, delta){
+        if(typeof delta === 'string') delta = this.parseRelativeCommit(delta) 
         if(delta != 0) throw Error('Currently Not Implemented')
         return repo.getHeadCommit()
+    },
+    async relativeBranchCommit(repo, branchname, delta){
+        let currentBranch = await repo.getCurrentBranch()
+        currentBranch = currentBranch.name()
+        let refname;
+        try{
+            refname = await repo.getReference(branchname)
+            refname = refname.name()
+        }
+        catch(err){
+            refname = branchname
+        }
+
+        await repo.setHead(refname)
+        let err;
+        let commit;
+        try{
+            commit = await this.relativeCommit(repo,delta)
+        }
+        catch(e){
+            err = e
+        }
+
+        await repo.setHead(currentBranch)
+        if(err) throw err
+        return commit
     },
     async trackRemoteBranch(repo, remotename, branchname) {
 
