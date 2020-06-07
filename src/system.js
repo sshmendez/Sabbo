@@ -53,7 +53,6 @@ Sabbo.gitpath = function(buildpath, appname){
     return path.join(buildpath,`git/${appname}`)
 }
 Sabbo.servepath = function(buildpath, appname, blob){
-    blob = blob
     appname = appname || appname
     return path.join(buildpath,`www/${appname}`,blob)
 }
@@ -75,28 +74,17 @@ Sabbo.buildConfig = function (config) {
 
     return config
 }
+
 Sabbo.exists = function(buildpath,appname, blob){
-    if(blob){
+    if(blob != undefined){
         return fse.existsSync(Sabbo.servepath(buildpath,appname,blob))
     }
     console.log(Sabbo.gitpath(buildpath,appname))
     return fse.existsSync(Sabbo.gitpath(buildpath,appname)) 
 
 }
-Sabbo.defaultBlob = function ({appname}){
-    return Sabbo.blob(appname, 'master','HEAD')
-}
-Sabbo.defaultPaths = async function ({buildpath, appname}){
-    let blob = Sabbo.defaultBlob({appname})
-    return {
-        gitpath: Sabbo.gitpath(buildpath, appname),
-        servepath: Sabbo.servepath(buildpath, appname,blob)
-    }
-}
-Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitid) {
-
+Sabbo.clone = async function(gitpath, servepath, branchname){
     let repo;
-
     let cloneargs = {checkoutBranch: branchname,fetchOpts: {
         callbacks: {
             certificateCheck: function () {
@@ -117,11 +105,18 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
         }
         throw err
     }
-    
+    return repo
+}
+/**
+ * This will fail if commitid isn't valid
+ */
+Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitid) {
+
+    let repo = await Sabbo.clone(gitpath, servepath, branchname)
     /**
      * Checkout branch, then detach head to commit
      */
-    console.log((await GitHelpers.getLocalReferences(repo)).map(r=>r.name()))
+    
     let headcommit = await repo.getBranchCommit(branchname)
 
     if(commitid != String(headcommit.id())){
@@ -161,17 +156,46 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
     return fse.existsSync(barepath)
 }
 
+/**
+ * Resolve relative commits like HEAD~1
+ * although currently GitHelpers.relativeCommit doesn't support anything but 'HEAD'
+ */
+Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitstring, bareRepo})=>{
+    bareRepo = bareRepo || await Sabbo.openBare({buildpath, gitpath, appname}) 
+    let commitid;   
+    try{
+        if(branchname) commitid = await GitHelpers.relativeBranchCommit(bareRepo, branchname, commitstring)
+        else commitid = await GitHelpers.relativeCommit(bareRepo, commitstring)
+        commitid = String(commitid)
+    }
+    catch(err){}
+    return commitid
+
+}
+
+/**
+ * It's okay to provide defaults because this is a high level function. 
+ * however I need to make a distinction. sometimes providing defaults add ambiguity to the system.
+ * if this were called in other internal functions I would want to make it explicit, but because this is gonna be a primary function used on the outside, 
+ * making it as easy to use as possible is the best option
+ * 
+ * why shouldn't I provide defaults in routes.deblob.context? 
+ * I do, I am providing bare repo. why? 
+ * I want to provide a default method for accessing bare repo
+ * I'm making a decision about how sabbo behaves.
+ */
 Sabbo.getWorktree = async ({buildpath, gitpath, servepath, appname, branchname, commitid, blob})=>{
-    let repo;
-    
-    gitpath = gitpath || Sabbo.gitpath(buildpath, appname)
-    servepath = servepath || Sabbo.servepath(buildpath, appname,blob)
+    let worktree;
+
+    gitpath = gitpath || Sabbo.gitpath(buildpath, appname);
+    blob = blob || Sabbo.blob(appname, branchname, commitid);
+    servepath = servepath || Sabbo.servepath(buildpath, appname,blob);
 
     if(!Sabbo.exists(buildpath, appname, blob)){
-        repo = Sabbo.initializeWorktree(gitpath, servepath, branchname, commitid)
+        worktree = await Sabbo.initializeWorktree(gitpath, servepath, branchname, commitid)
     }
-    else repo = Sabbo.openWorkTree({buildpath, appname, blob})
-    return repo
+    else worktree = await Sabbo.openWorkTree({buildpath, appname, blob})
+    return {worktree, blob}
 },
 
 Sabbo.listWorkTrees = async(appname, servepath)=>{

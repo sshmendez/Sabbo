@@ -100,35 +100,50 @@ function ftomid(func){
 
 
 /**
- * kindof a monolith
- * 
- * as a dev, I think buildpath can be considered safe, it isn't subject to change by the user
- * as a sec expert, I'm not a sec expert
+ * the algorithm for deblobbing:
+ *      if(not validapp_name) its a blob
+ *      else    return the default node
+ *      
+*/
+
+
+let deblob =  {}
+
+/**
+ * I feel like something is wrong here
  */
+deblob.context = async ({buildpath, gitpath, servepath, name_blob, bareRepo})=>{
+    let sabboctx;
 
+    if(Sabbo.exists(buildpath, name_blob)) 
+        sabboctx =  {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
+    else
+        sabboctx = Sabbo.parseBlob(name_blob)
 
-let getSabbo = (isValidApp, defaultblob, parseBlob)=>{
-        parseBlob = parseBlob || Sabbo.parseBlob
-        return async (name_blob)=>{
-            let blob;
-            if(!isValidApp(name_blob)) blob = name_blob;
-            else blob = await defaultblob(name_blob);
-            return Object.assign(parseBlob(blob),{blob})
-        }
+    let {appname, branchname} = sabboctx;
+    let commitstring = sabboctx.commitid;
+    let commitid;
+    bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
+    try{
+        commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname, commitstring, bareRepo})
     }
-
+    catch(err){
+        commitid = commitstring
+    }
+    if(!Git.Commit.lookup(bareRepo, commitid)){
+        throw Error("Commit doesn't exist")
+    }
+    return {appname, branchname, commitid}
+}
 
 let globalSabboBuilder =  (buildpath,configs,deblob)=>
 	(wtconf)=>{
-        wtconf = wtconf || {}
+        let getworktree = wtconf.worktree || true
         let repo;
 		return async (ctx, next)=>{
             let name_blob = ctx.params.appname || ctx.request.body.appname
-            let sabboctx = await deblob(name_blob);
-            let {appname, blob} = sabboctx
-            if(wtconf.getWorkTree) repo = await Sabbo.getWorktree({buildpath, appname, blob});
-            ctx.sabbo = Object.assign(ctx.sabbo || {}, sabboctx)
-            if(repo) ctx.sabbo.repo = repo
+            let sabbo = deblob.context(name_blob, getworktree, {buildpath})
+            ctx.sabbo = Object.assign(ctx.sabbo || {}, {sabbo})
 			await next()
 	}
 }
@@ -154,4 +169,4 @@ const isValidApp = (buildpath)=>{
  * If I was gonna create middleware, I would have to make a number of decisions and I don't want to 
  * think about that right now
  */
-module.exports = {Routes: routes, globalSabboBuilder,getSabbo, isValidApp}
+module.exports = {Routes: routes, globalSabboBuilder,deblob, isValidApp}

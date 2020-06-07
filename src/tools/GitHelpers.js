@@ -1,10 +1,12 @@
 let Git = require('nodegit')
 let path = require('path')
 
+
 module.exports = {
+    parseError: 'GitHelpers.parseRelativeCommit',
     parseRelativeCommit(commitstring){
         let parts = commitstring.split('~');
-        if(parts[0] != 'HEAD') throw Object.assign(Error(), {name: 'CommitParseError', message: 'Unable to parse '+commitstring});
+        if(parts[0] != 'HEAD') throw Object.assign(Error(), {function: this.parseError, message: 'Unable to parse '+commitstring});
         let delta = parts[1] || 0;
         return delta
 
@@ -17,7 +19,11 @@ module.exports = {
     async relativeBranchCommit(repo, branchname, delta){
         let currentBranch = await repo.getCurrentBranch()
         currentBranch = currentBranch.name()
+        
         let refname;
+        let err;
+        let commit;
+
         try{
             refname = await repo.getReference(branchname)
             refname = refname.name()
@@ -27,8 +33,6 @@ module.exports = {
         }
 
         await repo.setHead(refname)
-        let err;
-        let commit;
         try{
             commit = await this.relativeCommit(repo,delta)
         }

@@ -4,7 +4,7 @@ const assert = require('assert')
 const local = path.resolve.bind(__dirname,'src')
 
 const { Sabbo } = require(local('system.js'));
-const {Routes, globalSabbo, isValidApp, getSabbo} = require(local("tools/routes.js"));
+const {Routes, globalSabboBuilder, deblob} = require(local("tools/routes.js"));
 const GitHelpers = require(local("tools/GitHelpers.js"))
 const buildpath = local('../../build')
 
@@ -119,37 +119,15 @@ tests = {
         return Sabbo.listWorkTrees(appname,config.servepath)
     },
     async globalSabboTest({repo, config, localconfig}){
-        return
-        let {buildpath, name_blob} = config
-
-        let truth = {
-            worktree: await Sabbo.getWorktree({buildpath, 
-                branchname: config.branchname,
-                appname: config.appname,
-                commitid: config.commitid,
-                blob: config.blob}),
-            deblob:   Object.assign({},config.parsed_blob,{blob: config.blob})
-        }
-
-        let validapp = isValidApp(buildpath)
-        let defaultblob = (appname)=>{
-            return  Sabbo.blob(appname,"master", "HEAD")
-        }
-
-        let disambig = getSabbo(validapp, defaultblob, Sabbo.parseBlob)
-        let deblob = await disambig(name_blob)
+        let {buildpath} = config
+        let {name_blob} = localconfig 
+        name_blob = name_blob || config.appname
         
-        assert(
-            Object.keys(deblob)
-            .map(key=>truth.deblob[key] == deblob[key])
-            .reduce((acc, cur)=> acc && cur)
-        )
+        let sabboctx = await deblob.context({buildpath, name_blob})
+        let {appname, branchname, commitid} = sabboctx
+        let blob = Sabbo.blob(appname, branchname, commitid)
+        let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob});
 
-        let {appname, blob} = deblob
-        let worktree = await Sabbo.getWorktree({buildpath, appname, blob})
- 
-        assert(worktree.workdir() == truth.worktree.workdir())
-        
         return worktree.workdir()
     }
 }
@@ -210,7 +188,7 @@ let localconf = {
     }
 }
 let runtests;
-// runtests = ['getRefs', 'cloneAllBranches']
+runtests = ['globalSabboTest']
 runtests = runtests || Object.keys(tests)
 runtests = runtests.map(t=>({[t]: tests[t]}))
 runtests = Object.assign({}, ...runtests)
