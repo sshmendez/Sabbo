@@ -13,49 +13,52 @@ const send = require("koa-send");
 const local = path.resolve.bind('.', __dirname)
 console.log(local('system.js'))
 const { Sabbo } = require(local("system.js"));
-const {Routes, globalSabboBuilder, getSabbo} = require(local("tools/routes.js"));
+const {Routes, deblob} = require(local("tools/routes.js"));
 const GitHelpers = require(local('tools/GitHelpers'))
 // add a route for uploading multiple files
 
 const configfile = "../build/build.conf";
-const buildpath = local("../build");
-const worktree = {getWorkTree: true}
-
+const buildpath = local("../../build");
+ 
 
 const commandmap = {
 	'blob': ({appname, branchname, commitid})=>Sabbo.blob(appname,branchname, commitid)
 }
 
+/**
+ * An opomization can be added here
+ * caching a bare repo for deblob.context will prevent reopening
+ */
+const globalSabbo = ((buildpath)=> async (ctx,next)=>{
+	let name_blob = ctx.params.appname || ctx.request.body.appname
+	debugger
+	let sabboctx = await deblob.context({buildpath, name_blob})
+	let {appname, branchname, commitid} = sabboctx
+	let blob = Sabbo.blob(appname, branchname, commitid)
+	ctx.sabbo = ctx.sabbo || {}
+	Object.assign(ctx.sabbo, {appname, branchname, commitid, blob})
+	await next()
+})(buildpath)
 
+const getworktree = ((buildpath) => async (ctx, next)=>{
+	let {appname, branchname, commitid, blob} = ctx.sabbo
+	let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob})
+	ctx.sabbo.worktree = worktree
+	await next()
+})(buildpath)
 
-let defaultblob = (appname)=>{
-	return  Sabbo.blob(appname,"master", "HEAD")
-}
-
-let doubledot = (p)=>{
-	return p.indexOf('..') >= 0
-}
-
-const isValidApp = (buildpath)=>{
-	return (appname)=>Sabbo.isValidBare({buildpath,appname})
-}
-
-const deblob = getSabbo(isValidApp(buildpath), defaultblob, Sabbo.parseBlob)
-const globalSabbo = globalSabboBuilder(buildpath,{},deblob)
-
-router.post("/create", koaBody, globalSabbo(), async (ctx,next)=>{
-
-	let {appname, buildpath} = ctx.sabbo
+router.post("/create", koaBody, async (ctx,next)=>{
+	let {appname, clonepath} = ctx.request.body
 	Routes.create({
 		buildpath,
 		appname,
-		clonepath: ctx.request.body.clonepath},true)
+		clonepath},true)
 	ctx.body = 'Successfully created ' + appname
 	await next()
 
 });
 
-router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next)=>{
+router.post('/demos/:appname/', koaBody, globalSabbo, getworktree, async (ctx, next)=>{
 	let {buildpath,appname} = ctx.sabbo
 	let {command} = ctx.request.body
 
@@ -69,12 +72,11 @@ router.post('/demos/:appname/', koaBody, globalSabbo(worktree), async (ctx, next
 
 })
 
-router.get("/demos/:appname/:filename(.*)", globalSabbo(worktree), async (ctx,next)=>{
-	debugger
+router.get("/demos/:appname/:filename(.*)", globalSabbo, getworktree, async (ctx,next)=>{
 	console.log(ctx.params)
 	let filename = ctx.params.filename || 'src/index.js'
 	
-	await send(ctx, filename,{root: ctx.sabbo.repo.workdir()});
+	await send(ctx, filename,{root: ctx.sabbo.worktree.workdir()});
 
 	await next()
 });
@@ -91,7 +93,7 @@ app.use(async (ctx, next) => {
 	await next();
 });
 
-console.log("starting: ");
-Sabbo.remove(Sabbo.servepath(buildpath));
+let port = 3000
+console.log("starting port " + port + ": ");
 // start the server
 app.listen(3000);

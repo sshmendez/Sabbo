@@ -168,7 +168,9 @@ Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitst
         else commitid = await GitHelpers.relativeCommit(bareRepo, commitstring)
         commitid = String(commitid)
     }
-    catch(err){}
+    catch(err){
+        return commitstring
+    }
     return commitid
 
 }
@@ -183,19 +185,20 @@ Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitst
  * I do, I am providing bare repo. why? 
  * I want to provide a default method for accessing bare repo
  * I'm making a decision about how sabbo behaves.
+ * 
+ * I removed blob default. having a default blob created here means I have to reaturn it because it's a required segment in fetching                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
  */
 Sabbo.getWorktree = async ({buildpath, gitpath, servepath, appname, branchname, commitid, blob})=>{
     let worktree;
 
     gitpath = gitpath || Sabbo.gitpath(buildpath, appname);
-    blob = blob || Sabbo.blob(appname, branchname, commitid);
     servepath = servepath || Sabbo.servepath(buildpath, appname,blob);
 
     if(!Sabbo.exists(buildpath, appname, blob)){
-        worktree = await Sabbo.initializeWorktree(gitpath, servepath, branchname, commitid)
+        worktree = Sabbo.initializeWorktree(gitpath, servepath, branchname, commitid)
     }
-    else worktree = await Sabbo.openWorkTree({buildpath, appname, blob})
-    return {worktree, blob}
+    else worktree = Sabbo.openWorkTree({buildpath, appname, blob})
+    return worktree
 },
 
 Sabbo.listWorkTrees = async(appname, servepath)=>{

@@ -114,25 +114,30 @@ let deblob =  {}
  */
 deblob.context = async ({buildpath, gitpath, servepath, name_blob, bareRepo})=>{
     let sabboctx;
-
+    let defaultctx = {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
+    debugger
     if(Sabbo.exists(buildpath, name_blob)) 
-        sabboctx =  {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
+        sabboctx =  defaultctx;
     else
         sabboctx = Sabbo.parseBlob(name_blob)
 
     let {appname, branchname} = sabboctx;
-    let commitstring = sabboctx.commitid;
+    let commitstring = sabboctx.commitid || defaultctx.commitid;
     let commitid;
     bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
+
+    let exists = false;
     try{
-        commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname, commitstring, bareRepo})
+        await Git.Commit.lookup(bareRepo, commitstring);
+        exists = true;
     }
-    catch(err){
+    catch(err){}
+    if(exists){
         commitid = commitstring
     }
-    if(!Git.Commit.lookup(bareRepo, commitid)){
-        throw Error("Commit doesn't exist")
-    }
+    else
+        commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname, commitstring, bareRepo})
+
     return {appname, branchname, commitid}
 }
 
