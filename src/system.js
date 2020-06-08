@@ -144,12 +144,13 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
 
 Sabbo.parseBlob = function (blob) {
     let sect = blob.split(';')
-    if(sect.length < 3) return 0
-    return {
-        appname: sect.shift(),
-        branchname: sect.shift(),
-        commitid: sect.shift(),
-    };
+    let keys = ["appname","branchname","commit"]
+    let parsed = {}
+    for(let i in sect){ 
+        let s = sect[i]
+        if(s) parsed[keys[i]] = s
+    }
+    return parsed
 };
 Sabbo.isValidBare =  ({buildpath, appname})=>{
     let barepath = Sabbo.gitpath(buildpath, appname)
