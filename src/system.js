@@ -165,15 +165,18 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
  */
 Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitstring, bareRepo})=>{
     bareRepo = bareRepo || await Sabbo.openBare({buildpath, gitpath, appname}) 
-    let commitid;   
-
-    try{
-        await Git.Commit.lookup(bareRepo, commitstring);
-        commitid = commitstring 
-    }
-    catch(err){}
+    let isValidCommit = false;
     
-    if(!commitid){
+    
+    try{
+     isValidCommit = Boolean(await Git.Commit.lookup(bareRepo, commitstring));
+    }
+    catch(err){}  
+
+    if(isValidCommit)
+        commitid = commitstring
+
+    else{
         if(branchname) 
             commitid = await GitHelpers.relativeBranchCommit(bareRepo, branchname, commitstring)
         else 
