@@ -159,18 +159,28 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
 /**
  * Resolve relative commits like HEAD~1
  * although currently GitHelpers.relativeCommit doesn't support anything but 'HEAD'
+ * 
+ * if whats passed is a valid commit, returns that commit
  */
 Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitstring, bareRepo})=>{
     bareRepo = bareRepo || await Sabbo.openBare({buildpath, gitpath, appname}) 
     let commitid;   
+
     try{
-        if(branchname) commitid = await GitHelpers.relativeBranchCommit(bareRepo, branchname, commitstring)
-        else commitid = await GitHelpers.relativeCommit(bareRepo, commitstring)
+        await Git.Commit.lookup(bareRepo, commitstring);
+        commitid = commitstring 
+    }
+    catch(err){}
+    
+    if(!commitid){
+        if(branchname) 
+            commitid = await GitHelpers.relativeBranchCommit(bareRepo, branchname, commitstring)
+        else 
+            commitid = await GitHelpers.relativeCommit(bareRepo, commitstring)
+
         commitid = String(commitid)
     }
-    catch(err){
-        return commitstring
-    }
+
     return commitid
 
 }

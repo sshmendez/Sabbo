@@ -113,30 +113,19 @@ let deblob =  {}
  * I feel like something is wrong here
  */
 deblob.context = async ({buildpath, gitpath, servepath, name_blob, bareRepo})=>{
-    let sabboctx;
     let defaultctx = {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
-    debugger
+	 
     if(Sabbo.exists(buildpath, name_blob)) 
         sabboctx =  defaultctx;
     else
         sabboctx = Sabbo.parseBlob(name_blob)
 
-    let {appname, branchname} = sabboctx;
-    let commitstring = sabboctx.commitid || defaultctx.commitid;
-    let commitid;
+
+	let {appname, branchname, commitid} = sabboctx
     bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
 
-    let exists = false;
-    try{
-        await Git.Commit.lookup(bareRepo, commitstring);
-        exists = true;
-    }
-    catch(err){}
-    if(exists){
-        commitid = commitstring
-    }
-    else
-        commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname, commitstring, bareRepo})
+    commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname, commitstring, bareRepo})
+
 
     return {appname, branchname, commitid}
 }
