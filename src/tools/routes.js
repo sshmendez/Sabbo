@@ -1,6 +1,6 @@
 const path = require('path')
 const local = path.join.bind(__dirname,'..')
-const {Sabbo} = require(local('system.js'))
+const {Sabbo} = require(local('Sabbo.js'))
 const GitHelpers = require(local('tools/GitHelpers'))
 const Git = require('nodegit')
 const fse = require('fs-extra')
@@ -39,129 +39,59 @@ const fse = require('fs-extra')
   * that way testing becomes so much easier
   */
 let routes = {
-    create: async ({buildpath, appname, clonepath},override) => {
+    create: async ({buildpath, gitpath, servepath, appname, clonepath}) => {
         let config = Sabbo.buildConfig({appname, buildpath})
-        clonepath = clonepath || "";
-        if(Sabbo.exists(buildpath,appname) && override){
-            await Sabbo.cleanup(config, false)
+        return Sabbo.create(config, clonepath);
+    },
+    cleanup: async ({buildpath, gitpath, servepath})=>{
+        if(Sabbo.exists(buildpath,appname)){
+            return Sabbo.cleanup({buildpath, gitpath, servepath}, false)
         }
-        return await Sabbo.create(config, clonepath);
-    },
 
-    
+    },
     /**
-     * filename is considered unsafe, therefore a path check is performed, and no path
-     * is generated if a '..' or '/' is present
+     * determines if name_blob is an appname or blob then constructs the sabboctx
      */
-    getWorktreePath: async function(sabboctx,filename){
-        let repo = await Sabbo.getWorktree(sabboctx)
-        filename = filename || ''
-        console.log('path ' + path.dirname(repo.path()))
-        console.log("filename "+ filename)
-        return [repo, path.dirname(repo.path()), filename]
+    deblob:  async ({buildpath, gitpath, servepath, name_blob, bareRepo, defaultctx})=>{
+        defaultctx = defaultctx || {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
+         
+        if(Sabbo.exists(buildpath, name_blob)) 
+            sabboctx =  defaultctx;
+        else
+            sabboctx = Object.assign({},defaultctx,Sabbo.parseBlob(name_blob))
     
-    },
-
-
- 
+    
+        let {appname, branchname, commitid} = sabboctx
+        
+        bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
+    
+        commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname,commitstring: commitid, bareRepo})
+    
+    
+        return {appname, branchname, commitid}
+    }    
 }
 
-/**
- * Turning each entry into a koa middleware
- * I think each signature should look like this
- * async (ctx,next)=>{
- *  routes[functionName](ctx)
- *  await next()
- * }
- */
-
-
-/**
- * Function to Middleware
- */
-function ftomid(func){
-    return async (ctx, next, ctxmap)=>{
-        ctxmap = ctxmap || (()=>{})
-        let value = await func(ctx)
-        //I'm allowing overriding context here
-        //maybe I shouldn't
-        if(value instanceof Object)
-            Object.assign(ctx,value)
-        else if(value) ctx[func.name] = value
-
+let koa = {
+    globalSabbo: ((Routes)=>(buildpath)=> async (ctx,next)=>{
+        let name_blob = ctx.params.appname || ctx.request.body.appname
+        let {appname, branchname, commitid} = await Routes.deblob({buildpath, name_blob})
+        let blob = Sabbo.blob(appname, branchname, commitid)
+        ctx.sabbo = ctx.sabbo || {}
+        Object.assign(ctx.sabbo, {appname, branchname, commitid, blob})
+        await next()
+    })(routes),
+    getworktree: (buildpath) => async (ctx, next)=>{
+        let {appname, branchname, commitid, blob} = ctx.sabbo
+        let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob})
+        ctx.sabbo.worktree = worktree
         await next()
     }
-}
-
-// module.exports = Object.assign({}, 
-//     ...Object.keys(routes).map((fn)=>({[fn]: ftomid(routes[fn])})))
-
-
-
-
-/**
- * the algorithm for deblobbing:
- *      if(not validapp_name) its a blob
- *      else    return the default node
- *      
-*/
-
-
-let deblob =  {}
-
-/**
- * I feel like something is wrong here
- */
-deblob.context = async ({buildpath, gitpath, servepath, name_blob, bareRepo, defaultctx})=>{
-    defaultctx = defaultctx || {appname: name_blob, branchname: 'master', commitid: 'HEAD'};
-	 
-    if(Sabbo.exists(buildpath, name_blob)) 
-        sabboctx =  defaultctx;
-    else
-        sabboctx = Object.assign({},defaultctx,Sabbo.parseBlob(name_blob))
-
-
-    let {appname, branchname, commitid} = sabboctx
     
-    bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
-
-    commitid = await Sabbo.resolveRelative({buildpath, gitpath, appname, branchname,commitstring: commitid, bareRepo})
-
-
-    return {appname, branchname, commitid}
 }
 
-let globalSabboBuilder =  (buildpath,configs,deblob)=>
-	(wtconf)=>{
-        let getworktree = wtconf.worktree || true
-        let repo;
-		return async (ctx, next)=>{
-            let name_blob = ctx.params.appname || ctx.request.body.appname
-            let sabbo = deblob.context(name_blob, getworktree, {buildpath})
-            ctx.sabbo = Object.assign(ctx.sabbo || {}, {sabbo})
-			await next()
-	}
-}
+let middlewares = {koa}
 
-let validate = ()=>{
-    let {appname, branchname, commitid} = arguments
-    let check = {appname};
-    for(let attr in check){
-        if(!notpath(check[attr])){
-            throw Error({name: 'InvalidPath',message:'Invalid '+attr+': '+check[attr]})
-        }
-    }
-    
-    return arguments
-}
-const isValidApp = (buildpath)=>{
-	return (appname)=>Sabbo.isValidBare({buildpath,appname})
-}
-/**
- * I don't think I want to export middleware, 
- * each of these functions requires too much different context
- * 
- * If I was gonna create middleware, I would have to make a number of decisions and I don't want to 
- * think about that right now
- */
-module.exports = {Routes: routes, globalSabboBuilder,deblob, isValidApp}
+
+
+module.exports = {Routes: routes, Middlewares: middlewares}

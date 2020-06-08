@@ -1,42 +1,42 @@
-const path = require('path')
-const assert = require('assert')
+const path = require('path');
+const assert = require('assert');
 
-const local = path.resolve.bind(__dirname,'src')
+const local = path.resolve.bind(__dirname,'src');
 
-const { Sabbo } = require(local('system.js'));
-const {Routes, globalSabboBuilder, deblob} = require(local("tools/routes.js"));
-const GitHelpers = require(local("tools/GitHelpers.js"))
-const buildpath = local('../../build')
+const { Sabbo } = require(local('Sabbo.js'));
+const {Routes} = require(local("tools/routes.js"));
+let deblob = Routes.deblob;
+const GitHelpers = require(local("tools/GitHelpers.js"));
 
 let tests;
 tests = {
     async getRefs({repo,config}){
-        let refs =  await repo.getReferences()
-        let locals = refs.filter(ref=>!ref.isRemote())
-        return (locals.map(ref=>ref.name()))
+        let refs =  await repo.getReferences();
+        let locals = refs.filter(ref=>!ref.isRemote());
+        return (locals.map(ref=>ref.name()));
     },
     async checkoutBranch({repo, config, localconfig}){
-        let {buildpath, appname, branchname, commitid, blob} = config
-        let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob})
-        let localrefs = await GitHelpers.getLocalReferences(repo)
+        let {buildpath, appname, branchname, commitid, blob} = config;
+        let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob});
+        let localrefs = await GitHelpers.getLocalReferences(repo);
         
-        let {checkoutRef} = localconfig
+        let {checkoutRef} = localconfig;
 
         try{
-            await worktree.checkoutBranch('master')
+            await worktree.checkoutBranch('master');
         }
         catch(err){
-            console.log(err)
+            console.log(err);
         }
         
     },
     async tooBig({repo, config}){
         return
-        let {buildpath, appname} = config
+        let {buildpath, appname} = config;
 
-        refs = (await repo.getReferences()).map(ref=>ref.name())
-        let worktree = await Sabbo.getWorktree(config)
-        return await GitHelpers.getLocalReferences(worktree)
+        refs = (await repo.getReferences()).map(ref=>ref.name());
+        let worktree = await Sabbo.getWorktree(config);
+        return await GitHelpers.getLocalReferences(worktree);
 
 
 
@@ -72,104 +72,119 @@ tests = {
 
     },
     async getAllCommits({repo, sabboctx}){
-        let gen = GitHelpers.getCommits(repo)
+        let gen = GitHelpers.getCommits(repo);
         let val;
         do{
-            val = await gen.next()
+            val = await gen.next();
         }
         while(!val.done);
-        return true
+        return true;
     },
     async cloneAllBranchesAndCommits({repo, config}){
         return
-        let {buildpath, appname} = config
-        let refcommits = await tests.getAllBranchesAndCommits({repo,config})
+        let {buildpath, appname} = config;
+        let refcommits = await tests.getAllBranchesAndCommits({repo,config});
         let checkout = async (ref,commitid)=>{
 
-            let {branchname} = GitHelpers.cleaveRef(ref)
-            let blob = Sabbo.blob(appname,branchname,commitid,"cloneall")
-            let repo = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob})
-            let cid = (await repo.getHeadCommit()).id()
-            return repo
-        }
-        console.log(refcommits)
+            let {branchname} = GitHelpers.cleaveRef(ref);
+            let blob = Sabbo.blob(appname,branchname,commitid,"cloneall");
+            let repo = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob});
+            let cid = (await repo.getHeadCommit()).id();
+            return repo;
+        };
+        console.log(refcommits);
         for(let ref of Object.keys(refcommits)){
-            console.log(ref)
-            let commits = (await GitHelpers.getN(refcommits[ref])).map(c=>String(c.id()))
+            console.log(ref);
+            let commits = (await GitHelpers.getN(refcommits[ref])).map(c=>String(c.id()));
             for(let commitid of commits){
-                let worktree = await checkout(ref, commitid)
-                assert((await worktree.getHeadCommit()).id() == commitid)
+                let worktree = await checkout(ref, commitid);
+                assert((await worktree.getHeadCommit()).id() == commitid);
             }
         }
     }, 
     async cloneAllBranches({repo, config}){
-        let {buildpath,gitpath, appname} = config
-        let localrefs = await GitHelpers.getLocalReferences(repo)
+        let {buildpath,gitpath, appname} = config;
+        let localrefs = await GitHelpers.getLocalReferences(repo);
         for(let ref of localrefs){
-            let {branchname} = GitHelpers.cleaveRef(ref.name())
-            let commitid = String(await repo.getBranchCommit(branchname))
-            let blob = Sabbo.blob(appname, branchname, commitid, 'cab')
-            let servepath = Sabbo.servepath(buildpath, appname, blob)
-            await Sabbo.getWorktree({buildpath, gitpath, servepath, appname, branchname, commitid, blob})
+            let {branchname} = GitHelpers.cleaveRef(ref.name());
+            let commitid = String(await repo.getBranchCommit(branchname));
+            let blob = Sabbo.blob(appname, branchname, commitid, 'cab');
+            let servepath = Sabbo.servepath(buildpath, appname, blob);
+            await Sabbo.getWorktree({buildpath, gitpath, servepath, appname, branchname, commitid, blob});
 
         }
     },
     async verifyFiles({repo, config, localconfig}){
         return
-        return Sabbo.listWorkTrees(appname,config.servepath)
+        return Sabbo.listWorkTrees(appname,config.servepath);
     },
     async globalSabboTest({repo, config, localconfig}){
-        let {buildpath} = config
-        let {name_blob} = localconfig 
-        name_blob = name_blob || config.appname
+        let {buildpath} = config;
+        let {name_blob} = localconfig;
+        name_blob = name_blob || config.appname;
         
-        let sabboctx = await deblob.context({buildpath, name_blob})
-        let {appname, branchname, commitid} = sabboctx
-        let blob = Sabbo.blob(appname, branchname, commitid)
+        let sabboctx = await deblob.context({buildpath, name_blob});
+        let {appname, branchname, commitid} = sabboctx;
+        let blob = Sabbo.blob(appname, branchname, commitid);
         let worktree = await Sabbo.getWorktree({buildpath, appname, branchname, commitid, blob});
 
-        return worktree.workdir()
+        return worktree.workdir();
     }
 }
 
 
-let appname = 'testname'
-let clonepath = local('../tests/testrepo')
-console.log(clonepath)
-console.log(Sabbo.openBare)
-Sabbo.cleanup({buildpath}, true)
-
 let run = async (config, localconfigs, tests)=>{
-    await Routes.create(config,true)
-    let repo = await Sabbo.openBare(config)
+    await Routes.create(config,true);
+    let repo = await Sabbo.openBare(config);
 
-    config = Object.assign({},config)
+    config = Object.assign({},config);
 
-    config.commitid = await GitHelpers.relativeBranchCommit(repo, config.branchname, config.commitid)
-    config.commitid = String(config.commitid)
+    config.commitid = await GitHelpers.relativeBranchCommit(repo, config.branchname, config.commitid);
+    config.commitid = String(config.commitid);
 
-    config.blob = Sabbo.blob(config.appname, config.branchname, config.commitid)
+    config.blob = Sabbo.blob(config.appname, config.branchname, config.commitid);
 
     for(test in tests){
         let msg = '-----------'+test+'-------------'
-        console.log(msg)
+        console.log(msg);
         let conf = {
             repo,config,localconfig: localconfigs[test] || {}
         }
         try{
-            val = await tests[test](conf)
-            console.log(val)
+            val = await tests[test](conf);
+            console.log(val);
         } 
         catch(err){ 
-            console.log(err)
+            console.log(err);
         }
-        console.log('-'.repeat(msg.length))
+        console.log('-'.repeat(msg.length));
 
     }
 }
 
 
-    
+let main = (config,localconf, runtests) => async (ran)=>{
+    try{
+        await run(config, localconf, runtests);
+    }
+    catch(err){
+        if(err.errno == -4 && err.errorFunction == 'Clone.clone' && !ran){
+            await Sabbo.cleanupForce({buildpath: '/home/shmendez/dev/proj/workspace/sabbo/build/'});
+            await main(true);
+        }
+        else{
+            throw err;
+        }
+    }
+}
+
+
+let appname = 'testname';
+let clonepath = local('../tests/testrepo');
+const buildpath = local('../../build');
+
+Sabbo.cleanup({buildpath});
+
 let config = {
     buildpath,
     appname,
@@ -187,22 +202,12 @@ let localconf = {
         checkoutRef: 'origin/newbranch'
     }
 }
+
 let runtests;
-runtests = ['globalSabboTest']
-runtests = runtests || Object.keys(tests)
-runtests = runtests.map(t=>({[t]: tests[t]}))
-runtests = Object.assign({}, ...runtests)
+runtests = ['globalSabboTest'];
+runtests = runtests || Object.keys(tests);
+runtests = runtests.map(t=>({[t]: tests[t]}));
+runtests = Object.assign({}, ...runtests);
 
 
-let main = async (ran)=>{
-    try{
-        await run(config, localconf, runtests)
-    }
-    catch(err){
-        if(err.errno == -4 && err.errorFunction == 'Clone.clone' && !ran){
-            await Sabbo.cleanupForce({buildpath: '/home/shmendez/dev/proj/workspace/sabbo/build/'})
-            await main(true)
-        }
-    }
-}
-main()
+main(config,localconf, runtests)();

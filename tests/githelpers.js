@@ -1,6 +1,6 @@
 let Git = require('nodegit')
 let GitHelpers = require('../src/tools/GitHelpers.js')
-let { Sabbo } = require('../src/system.js')
+let { Sabbo } = require('../src/Sabbo.js')
 
 let config = {
     appname: 'testination',

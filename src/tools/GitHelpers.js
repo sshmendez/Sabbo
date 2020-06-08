@@ -150,33 +150,6 @@ module.exports = {
         while(true);
 
     },
-    /**
-     * probably creating tools/itertools 
-     */
-    async getN(generator, n){
-        let done;
-        let value;
-        let all = n == undefined
-        let vals = []
-        for(let i = 0; i < n || all, !done; i++){
-            ({value, done} = await generator.next())
-            if(!done) vals.push(value)
-        }
-        return vals
-    },
-    /**
-     *  depreciating
-     */
-    async getNCommits(repo, {oid, refname, nCommits}){
-        process.emitWarning('getNCommits will soon be removed from GitHelpers'+
-         'please stop using it to avoid failures in the future')
-		let comgen = GitHelpers.getCommits(repo, {oid, refname})
-		return await GitHelpers.getN(comgen, numCommits)
 
-    }
-    /**
-     * Provides a generator to iterate over refs
-     */
 
-    
 }

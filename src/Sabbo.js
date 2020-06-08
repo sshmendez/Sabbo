@@ -8,7 +8,25 @@ const GitHelpers = require("./tools/GitHelpers.js")
 Sabbo.canRemovePath = 'remove.sabbo'
 let _makeRemovable = (dir)=>fse.writeFileSync(path.join(dir, Sabbo.canRemovePath), 1);
 
-
+/**
+ * Concepts:
+ *  gitpath: path of directory containing bare repos
+ *  servepath: path of directory containing clones of bare repos and builds of clones
+ *  buildpath: used when gitpath or servepath is not provided; base path to generate default gitpath and servepath
+ *  
+ *  appname: the name of the bare repo;
+ *           used to find the bare repo in gitpath
+ *           and the servable worktree/build in servepath
+ *  branchname: the name of a branch in the apps bare repo
+ *  commitid: either the commit sha or relative commit string like 'HEAD'
+ * 
+ *  Sabbo Context (sabboctx): {buildpath, gitpath, servepath, appname, branchname, commitid}
+ *            this is all you need in order to fetch an existing bare repo and build the proper clone
+ *  
+ * 
+ *              
+ *          
+ */
 async function Sabbo(config, cloneUrl) {
     throw Error('Sabbo Depreciated, use Sabbo.create instead')
 }
@@ -85,6 +103,7 @@ Sabbo.exists = function(buildpath,appname, blob){
 }
 Sabbo.clone = async function(gitpath, servepath, branchname){
     let repo;
+    
     let cloneargs = {checkoutBranch: branchname,fetchOpts: {
         callbacks: {
             certificateCheck: function () {
@@ -260,8 +279,8 @@ Sabbo.cleanupForce = async function({buildpath}){
     fse.removeSync(buildpath)
 }
 
-Sabbo.cleanup = async function ({buildpath}) {
-    Sabbo.remove(buildpath)
+Sabbo.cleanup = async function ({undesired: path}) {
+    Sabbo.remove(undesired)
 }
 
 Sabbo.canRemove = function (desiredPath) {

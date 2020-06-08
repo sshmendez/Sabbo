@@ -1,6 +1,6 @@
 let {
     Sabbo
-} = require('../src/system.js')
+} = require('../src/Sabbo.js')
 let path = require('path')
 let Git = require('nodegit')
 const {Branch} = Git
