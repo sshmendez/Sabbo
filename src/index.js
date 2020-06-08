@@ -31,9 +31,7 @@ const commandmap = {
  */
 const globalSabbo = ((buildpath)=> async (ctx,next)=>{
 	let name_blob = ctx.params.appname || ctx.request.body.appname
-	debugger
-	let sabboctx = await deblob.context({buildpath, name_blob})
-	let {appname, branchname, commitid} = sabboctx
+	let {appname, branchname, commitid} = await deblob.context({buildpath, name_blob})
 	let blob = Sabbo.blob(appname, branchname, commitid)
 	ctx.sabbo = ctx.sabbo || {}
 	Object.assign(ctx.sabbo, {appname, branchname, commitid, blob})
@@ -72,10 +70,9 @@ router.post('/demos/:appname/', koaBody, globalSabbo, getworktree, async (ctx, n
 
 })
 
-router.get("/demos/:appname/:filename(.*)", globalSabbo, getworktree, async (ctx,next)=>{
-	console.log(ctx.params)
+router.get("/demos/:appname/:filename(.*)?", globalSabbo, getworktree, async (ctx,next)=>{
 	let filename = ctx.params.filename || 'src/index.js'
-	
+	console.log(ctx.sabbo)
 	await send(ctx, filename,{root: ctx.sabbo.worktree.workdir()});
 
 	await next()
