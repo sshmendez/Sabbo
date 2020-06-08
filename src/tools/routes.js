@@ -118,11 +118,10 @@ deblob.context = async ({buildpath, gitpath, servepath, name_blob, bareRepo, def
     if(Sabbo.exists(buildpath, name_blob)) 
         sabboctx =  defaultctx;
     else
-        sabboctx = Sabbo.parseBlob(name_blob)
+        sabboctx = Object.assign({},defaultctx,Sabbo.parseBlob(name_blob))
 
 
     let {appname, branchname, commitid} = sabboctx
-    commitid = commitid || defaultctx.commitid
     
     bareRepo = bareRepo || await Sabbo.openBare({buildpath,gitpath, appname});
 
