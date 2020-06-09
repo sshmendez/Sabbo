@@ -1,18 +1,34 @@
-let Git = require('nodegit')
-let GitHelpers = require('../src/tools/GitHelpers.js')
-let { Sabbo } = require('../src/Sabbo.js')
 
+const path = require('path')
+let Git = require('nodegit')
+const local = path.resolve.bind('.', __dirname, '../src');
+let GitHelpers = require(local('tools/GitHelpers.js'))
+let { Sabbo } = require(local("Sabbo.js"))
+
+
+let tests = {
+    async resolveRelative(repo,{commitstring, branchname}){
+        let commitid = await GitHelpers.resolveRelative(repo,commitstring, branchname)
+        return commitid
+    }
+}
 let config = {
-    appname: 'testination',
-    branch: 'master',
-    commitid: 'head',
-    cloneFrom: '/Users/mendez/dev/proj/workspace/modulethief',
+    repopath: local('../'),
+    commitstring: 'HEAD',
+    branchname: 'master'
+}
+
+async function run(config, tests) {
+
+    let repo = await Git.Repository.open(config.repopath)
+    for (let test in tests) {
+
+        console.log('Running', test + ":")
+        let val = await tests[test](repo,config)
+        console.log(val)
+    }
 
 }
 
-config = Sabbo.buildConfig(config)
-
-console.log(config)
-
-Sabbo(config,true)
+run(config,tests)
 

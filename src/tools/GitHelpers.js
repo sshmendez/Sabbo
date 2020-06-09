@@ -6,7 +6,7 @@ module.exports = {
     parseError: 'GitHelpers.parseRelativeCommit',
     parseRelativeCommit(commitstring){
         let parts = commitstring.split('~');
-        if(parts[0] != 'HEAD') throw Object.assign(Error(), {function: this.parseError, message: 'Unable to parse '+commitstring});
+        if(parts[0].toUpperCase() != 'HEAD') throw Object.assign(Error(), {function: this.parseError, message: 'Unable to parse '+commitstring});
         let delta = parts[1] || 0;
         return delta
 
@@ -17,6 +17,7 @@ module.exports = {
         return repo.getHeadCommit()
     },
     async relativeBranchCommit(repo, branchname, delta){
+        debugger
         let currentBranch = await repo.getCurrentBranch()
         currentBranch = currentBranch.name()
         
@@ -44,6 +45,42 @@ module.exports = {
         if(err) throw err
         return commit
     },
+    async resolveRelative(repo, commitstring, branchname){
+        let isValidCommit = false;
+        let commitid;
+        try{
+         isValidCommit = await this.commitExists(repo, commitstring);
+        }
+        catch(err){}  
+    
+        if(isValidCommit)
+            commitid = commitstring
+    
+        else{
+            if(branchname) 
+                commitid = await this.relativeBranchCommit(repo, branchname, commitstring)
+            else 
+                commitid = await this.relativeCommit(repo, commitstring)
+    
+            commitid = String(commitid)
+        }
+    
+        return commitid
+    
+    },
+    /**
+     * Written because NodeGit.Commit.lookup results in a seg fault if the commit is not a valid commitid
+     */
+    async commitExists(repo, commitstring){
+        let commits = await this.getCommits(repo)
+        while(true){
+            let {done, value} = await commits.next()
+            if(String(value) == commitstring)
+                return commitstring
+            else if(done) return false
+        }
+    },
+
     async trackRemoteBranch(repo, remotename, branchname) {
 
         let remote_path = path.join(remotename, branchname);

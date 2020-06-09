@@ -75,24 +75,6 @@ Sabbo.servepath = function(buildpath, appname, blob){
     return path.join(buildpath,`www/${appname}`,blob)
 }
 
-Sabbo.buildConfig = function (config) {
-    config = Object.assign({}, config)
-    if(!config.appname) throw {message: 'Appname must exist', name: 'AppnameException'}
-    let buildpath = config.buildpath || path.resolve("build");
-    let build = path.join.bind(path, buildpath);
-    let gitpath = Sabbo.gitpath(buildpath, config.appname);
-    let servepath = Sabbo.servepath(buildpath, config.appname, '');
-
-    Object.assign(config, {
-        buildpath: build(),
-        gitpath,
-        servepath,
-    })
-
-
-    return config
-}
-
 Sabbo.exists = function(buildpath,appname, blob){
     if(blob != undefined){
         return fse.existsSync(Sabbo.servepath(buildpath,appname,blob))
@@ -109,6 +91,10 @@ Sabbo.clone = async function(gitpath, servepath, branchname){
             certificateCheck: function () {
                 return 0;
             },
+            credentials: function(url, userName){
+                console.log(userName)
+                return Git.Cred.sshKeyFromAgent(userName)
+            }
         }
     }}
 
@@ -129,7 +115,7 @@ Sabbo.clone = async function(gitpath, servepath, branchname){
 /**
  * This will fail if commitid isn't valid
  */
-Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitid) {
+Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commitstring) {
 
     let repo = await Sabbo.clone(gitpath, servepath, branchname)
     /**
@@ -137,6 +123,8 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
      */
     
     let headcommit = await repo.getBranchCommit(branchname)
+    
+    let commitid = await Sabbo.resolveRelative({bareRepo: repo, branchname, commitstring})
 
     if(commitid != String(headcommit.id())){
         /**
@@ -160,7 +148,32 @@ Sabbo.initializeWorktree = async function (gitpath, servepath, branchname, commi
 
   
 }
+/**
+ * With this function i'm deciding that the blobs will never contain more information than is needed to uniquiely identify them
+ * so, I can assume that they will only even need to be (appname, branchname, commitid)
+ * with that, constructing blobs internally when provided that information is enough
+ * 
+ * blobs will never be user generated, they are for internal use only
+ */
+Sabbo.cloneRelativeCommit = async function({gitpath, servepath, appname, branchname, commitstring}){
+    commitstring = commitstring || "HEAD"
+    let servename = 'temp'+String(Math.random()).replace('.','1')
+    let instancepath = path.join(servepath, servename)
+    let repo = await Sabbo.clone(gitpath, instancepath, branchname)
+    let commitid = await GitHelpers.resolveRelative(repo, commitstring, branchname)
+    console.log(commitid)
+    let blob = Sabbo.blob(appname, branchname, commitid)
 
+    if(commitid != String((await repo.getBranchCommit(branchname)).id())){
+        fse.remove(instancepath)
+        throw Error('Not implemented; cannot checkout specific commits')
+    }
+    if(commitid != commitstring)
+        fse.copy(instancepath, path.join(servepath, blob)).then(()=>fse.remove(instancepath))
+
+
+
+}
 Sabbo.parseBlob = function (blob) {
     let sect = blob.split(';')
     let keys = ["appname","branchname","commit"]
@@ -182,30 +195,9 @@ Sabbo.isValidBare =  ({buildpath, appname})=>{
  * 
  * if whats passed is a valid commit, returns that commit
  */
-Sabbo.resolveRelative = async ({buildpath, gitpath, appname, branchname,commitstring, bareRepo})=>{
-    bareRepo = bareRepo || await Sabbo.openBare({buildpath, gitpath, appname}) 
-    let isValidCommit = false;
-    let commitid;
-    
-    try{
-     isValidCommit = Boolean(await Git.Commit.lookup(bareRepo, commitstring));
-    }
-    catch(err){}  
-
-    if(isValidCommit)
-        commitid = commitstring
-
-    else{
-        if(branchname) 
-            commitid = await GitHelpers.relativeBranchCommit(bareRepo, branchname, commitstring)
-        else 
-            commitid = await GitHelpers.relativeCommit(bareRepo, commitstring)
-
-        commitid = String(commitid)
-    }
-
-    return commitid
-
+Sabbo.resolveRelative = async (repo, branchname, commitstring)=>{
+    console.log("Depreciating Sabbo.resolveRelative, use githelper instead")
+    return GitHelpers.resolveRelative(repo, commitstring, branchname)
 }
 
 /**
@@ -238,17 +230,14 @@ Sabbo.listWorkTrees = async(appname, servepath)=>{
     let publicApp = path.join(servepath, appname)
     return fse.readdir(publicApp)
 }
-/**
- * Maybe Write a function that returns worktrees; not sure if this is an api function or Sabbo
- */
-// Sabbo.listWorktrees = async function ({appname, servepath}) {
-//     fse.ls
-// }
+
+
 Sabbo.openWorkTree = async function ({buildpath, appname, blob}) {
     return Git.Repository.open(Sabbo.servepath(buildpath, appname, blob));
 }
-Sabbo.openBare = async function({buildpath, appname}){
-    return Git.Repository.open(Sabbo.gitpath(buildpath,appname))
+Sabbo.openBare = async function({buildpath,gitpath, appname}){
+    gitpath = gitpath || Sabbo.gitpath(buildpath, appname)
+    return Git.Repository.open(gitpath)
 }
 
 
@@ -257,17 +246,18 @@ Sabbo.cleanLocalBare = function ({
 }) {
     Sabbo.remove(gitpath)
 }
-Sabbo.cleanPublic = function({buildpath, appname}){
-    return Sabbo.cleanWorktrees({buildpath, appname}, '')
+Sabbo.cleanPublic = function({buildpath,servepath, appname}){
+    servepath = servepath || Sabbo.servepath(buildpath,appname, '')
+    return Sabbo.remove(servepath)
 }
-Sabbo.cleanWorktrees = function ({buildpath, appname}, blobs) {
+Sabbo.cleanWorktrees = function ({servepath, appname}, blobs) {
     if (blobs)
         blobs = blobs instanceof Array ? blobs : [blobs]
     else
         blobs = []
     
     blobs.filter(b=>!!b).forEach(blob => {
-        let worktree = Sabbo.servepath(buildpath, appname, blob)
+        let worktree = path.join(servepath, blob)
         Sabbo.remove(worktree)
     })
 
@@ -275,8 +265,8 @@ Sabbo.cleanWorktrees = function ({buildpath, appname}, blobs) {
 /**
  * Be safe with force please!
  */
-Sabbo.cleanupForce = async function({buildpath}){
-    fse.removeSync(buildpath)
+Sabbo.removeForce = async function(undesired){
+    fse.removeSync(undesired)
 }
 
 Sabbo.cleanup = async function ({undesired: path}) {
